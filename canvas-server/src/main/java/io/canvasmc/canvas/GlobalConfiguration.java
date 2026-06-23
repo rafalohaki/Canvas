@@ -445,11 +445,6 @@ public class GlobalConfiguration extends Part {
             //     }
             //     return null;
             // });
-            option("pearlDuplication")
-                .docs(
-                    "There is a Vanilla bug where in-flight pearls are duplicated at shutdown. This fixes that when",
-                    "the option \"restoreVanillaEnderPearlBehavior\" is enabled alongside this."
-                );
         }
 
         public boolean mc261810 = false;
@@ -469,7 +464,6 @@ public class GlobalConfiguration extends Part {
         public boolean mc30391 = false;
         public boolean mc183990 = false;
         public boolean mc136249 = false;
-        public boolean pearlDuplication = false;
     }
 
     public Networking networking = new Networking();
@@ -606,10 +600,13 @@ public class GlobalConfiguration extends Part {
             option("enableLogCleaner").docs("Auto-removes old log files from the \"logs\" directory");
             option("length").docs("The amount of the time unit until the log file is marked for deletion");
             option("unit").docs("The type of time unit to use when comparing how old the file is to the current time");
+            option("logEnderPearlRewriteActions").docs("Logs when a pearl is saved or loaded from Canvas' pearl save rewrite");
         }
 
         public boolean enableLogCleaner = false;
         public long length = 30;
         public ChronoUnit unit = ChronoUnit.DAYS;
+
+        public boolean logEnderPearlRewriteActions = true;
     }
 }
