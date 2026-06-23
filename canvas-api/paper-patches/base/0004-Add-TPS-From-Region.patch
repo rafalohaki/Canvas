@@ -3,9 +3,8 @@ From: Euphyllia Bierque <bierque.euphyllia@gmail.com>
 Date: Tue, 28 Jan 2025 16:34:17 -0800
 Subject: [PATCH] Add TPS From Region
 
-
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index de21023e1e0ea9d22f6beb8ef50715809c10058a..550c7eef69acde07c05b0cb75bf413186c09a26a 100644
+
 --- a/src/main/java/org/bukkit/Bukkit.java
 +++ b/src/main/java/org/bukkit/Bukkit.java
 @@ -2990,6 +2990,42 @@ public final class Bukkit {
@@ -52,7 +51,7 @@ index de21023e1e0ea9d22f6beb8ef50715809c10058a..550c7eef69acde07c05b0cb75bf41318
      /**
       * @deprecated All methods on this class have been deprecated, see the individual methods for replacements.
 diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index dd8ad5976eb413f049245a4f37bd94b3e41829de..23901bb9e01a90dc5f12e458b7188d51e91022b4 100644
+
 --- a/src/main/java/org/bukkit/Server.java
 +++ b/src/main/java/org/bukkit/Server.java
 @@ -2780,4 +2780,34 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi

@@ -14,9 +14,10 @@ val canvasMavenPublicUrl = "https://maven.canvasmc.io/public/"
 paperweight {
     filterPatches = false
     gitFilePatches = false
-    upstreams.register("paper") {
+    upstreams.paper {
         repo = github("PaperMC", "Paper")
         ref = providers.gradleProperty("paperCommit")
+        applyUpstreamNested.set(false)
 
         patchFile {
             path = "paper-server/build.gradle.kts"
@@ -28,8 +29,9 @@ paperweight {
             outputFile = file("canvas-api/build.gradle.kts")
             patchFile = file("canvas-api/build.gradle.kts.patch")
         }
-        patchRepo("paperApi") {
+        patchDir("paperApi") {
             upstreamPath = "paper-api"
+            excludes = setOf("build.gradle.kts")
             patchesDir = file("canvas-api/paper-patches")
             outputDir = file("paper-api")
         }

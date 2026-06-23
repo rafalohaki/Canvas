@@ -14,7 +14,7 @@ more helpful than some random error log caused by
 a breakage.
 
 diff --git a/src/main/java/io/papermc/paper/plugin/configuration/PluginMeta.java b/src/main/java/io/papermc/paper/plugin/configuration/PluginMeta.java
-index a399f87e925a72aac91b3066317c3efb61c0421a..0100108fd87268d225a60e51eaf87071b359ef6f 100644
+
 --- a/src/main/java/io/papermc/paper/plugin/configuration/PluginMeta.java
 +++ b/src/main/java/io/papermc/paper/plugin/configuration/PluginMeta.java
 @@ -189,4 +189,12 @@ public interface PluginMeta extends Namespaced {
@@ -31,7 +31,7 @@ index a399f87e925a72aac91b3066317c3efb61c0421a..0100108fd87268d225a60e51eaf87071
 +    // Folia end - block plugins not marked as supported
  }
 diff --git a/src/main/java/org/bukkit/plugin/PluginDescriptionFile.java b/src/main/java/org/bukkit/plugin/PluginDescriptionFile.java
-index c14ce1e7d7a5e30cd29b406a412e47104b529511..4a5ac5193bee2107ddc65f37a39046f92e875350 100644
+
 --- a/src/main/java/org/bukkit/plugin/PluginDescriptionFile.java
 +++ b/src/main/java/org/bukkit/plugin/PluginDescriptionFile.java
 @@ -267,6 +267,19 @@ public final class PluginDescriptionFile implements io.papermc.paper.plugin.conf

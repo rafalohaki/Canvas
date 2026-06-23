@@ -8,7 +8,7 @@ of the ticking region should help debug the cause.
 
 diff --git a/io/papermc/paper/threadedregions/FoliaWatchdogThread.java b/io/papermc/paper/threadedregions/FoliaWatchdogThread.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e9ca1a15049b0211d10401cb78e953b93afaf6c7
+
 --- /dev/null
 +++ b/io/papermc/paper/threadedregions/FoliaWatchdogThread.java
 @@ -0,0 +1,104 @@
@@ -117,7 +117,7 @@ index 0000000000000000000000000000000000000000..e9ca1a15049b0211d10401cb78e953b9
 +    }
 +}
 diff --git a/io/papermc/paper/threadedregions/TickRegionScheduler.java b/io/papermc/paper/threadedregions/TickRegionScheduler.java
-index 0b4f8f57ceaa5e175ac2b13476076e75c4b1383d..4abfeb3b897160ea57f40ccf75c26ac408d7791d 100644
+
 --- a/io/papermc/paper/threadedregions/TickRegionScheduler.java
 +++ b/io/papermc/paper/threadedregions/TickRegionScheduler.java
 @@ -42,6 +42,12 @@ public final class TickRegionScheduler {
@@ -168,7 +168,7 @@ index 0b4f8f57ceaa5e175ac2b13476076e75c4b1383d..4abfeb3b897160ea57f40ccf75c26ac4
                  final long cpuEnd = MEASURE_CPU_TIME ? THREAD_MX_BEAN.getCurrentThreadCpuTime() : 0L;
  
 diff --git a/io/papermc/paper/threadedregions/TickRegions.java b/io/papermc/paper/threadedregions/TickRegions.java
-index 4139d6c7b2164c233d71b0d1289ae3f6717e44ff..e2f90ec873982d0e476b685c2f48934745b13092 100644
+
 --- a/io/papermc/paper/threadedregions/TickRegions.java
 +++ b/io/papermc/paper/threadedregions/TickRegions.java
 @@ -391,9 +391,9 @@ public final class TickRegions implements ThreadedRegionizer.RegionCallbacks<Tic
