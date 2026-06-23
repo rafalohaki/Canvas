@@ -1,6 +1,6 @@
---- a/folia-api/build.gradle.kts
-+++ b/folia-api/build.gradle.kts
-@@ -4,6 +_,7 @@
+--- a/paper-api/build.gradle.kts
++++ b/paper-api/build.gradle.kts
+@@ -4,_,7 @@
      `java-library`
      `maven-publish`
      idea
@@ -8,16 +8,16 @@
  }
  
  java {
-@@ -44,7 +_,7 @@
+@@ -44,_,7 @@
      // api dependencies are listed transitively to API consumers
-     api("com.google.guava:guava:33.6.0-jre")
-     api("com.google.code.gson:gson:2.14.0")
+     api("com.google.guava:guava:33.5.0-jre")
+     api("com.google.code.gson:gson:2.13.2")
 -    api("org.yaml:snakeyaml:2.2")
 +    api("org.yaml:snakeyaml:2.3")
      api("org.joml:joml:1.10.8") {
          isTransitive = false // https://github.com/JOML-CI/JOML/issues/352
      }
-@@ -66,9 +_,10 @@
+@@ -66,_,10 @@
      apiAndDocs("net.kyori:adventure-text-serializer-plain")
      apiAndDocs("net.kyori:adventure-text-logger-slf4j")
  
@@ -31,7 +31,7 @@
  
      // Annotations - Slowly migrate to jspecify
      val annotations = "org.jetbrains:annotations:$annotationsVersion"
-@@ -84,7 +_,7 @@
+@@ -84,_,14 @@
      // Test dependencies
      testImplementation("org.apache.commons:commons-lang3:3.20.0")
      testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
@@ -40,78 +40,55 @@
      testImplementation("org.mockito:mockito-core:5.22.0")
      testImplementation("org.ow2.asm:asm-tree:9.9.1")
      mockitoAgent("org.mockito:mockito-core:5.22.0") { isTransitive = false } // configure mockito agent that is needed in newer java versions
-@@ -102,17 +_,21 @@
+     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
+ }
+ 
+-val generatedDir: java.nio.file.Path = layout.projectDirectory.dir("src/generated/java").asFile.toPath()
++val generatedDir: java.nio.file.Path = rootProject.layout.projectDirectory.dir("paper-api/src/generated/java").asFile.toPath()
+ idea {
+     module {
+         generatedSourceDirs.add(generatedDir.toFile())
+@@ -101,_,20 @@
+     main {
          java {
              srcDir(generatedDir)
-             srcDir(file("../paper-api/src/main/java"))
-+            srcDir(file("../folia-api/src/main/java"))
-         }
-         resources {
-             srcDir(file("../paper-api/src/main/resources"))
-+            srcDir(file("../folia-api/src/main/resources"))
-         }
-     }
-     test {
-         java {
-             srcDir(file("../paper-api/src/test/java"))
-+            srcDir(file("../folia-api/src/test/java"))
-         }
-         resources {
-             srcDir(file("../paper-api/src/test/resources"))
-+            srcDir(file("../folia-api/src/test/resources"))
-         }
-     }
- }
-@@ -147,6 +_,32 @@
-             suppressPomMetadataWarningsFor(it)
-         }
-         from(components["java"])
-+        // Canvas start - add more info to the publication
-+        pom {
-+            name.set("canvas-api")
-+            description.set("API bundle for the Canvas Minecraft server software")
-+            url.set("https://github.com/CraftCanvasMC/Canvas")
-+            licenses {
-+                license {
-+                    name.set("GPL-3.0")
-+                    url.set("https://github.com/CraftCanvasMC/Canvas/blob/HEAD/LICENSE")
-+                    distribution.set("repo")
-+                }
-+            }
-+            developers {
-+                developer {
-+                    id.set("canvas-team")
-+                    name.set("Canvas Team")
-+                    organization.set("CanvasMC")
-+                    organizationUrl.set("https://canvasmc.io")
-+                    roles.add("developer")
-+                }
-+            }
-+            scm {
-+                url.set("https://github.com/CraftCanvasMC/Canvas")
-+            }
++            srcDir(file("../paper-api/src/main/java"))
 +        }
-+        // Canvas end - add more info to the publication
++        resources {
++            srcDir(file("../paper-api/src/main/resources"))
+         }
      }
++    test {
++        java {
++            srcDir(file("../paper-api/src/test/java"))
++        }
++        resources {
++            srcDir(file("../paper-api/src/test/resources"))
++        }
++    }
  }
  
-@@ -187,6 +_,10 @@
-     }
- }
- 
-+tasks.withType<JavaCompile>().configureEach {
-+    options.compilerArgs.add("--add-modules=jdk.incubator.vector")
-+}
-+
- abstract class Services {
-     @get:Inject
-     abstract val fileSystemOperations: FileSystemOperations
-@@ -195,6 +_,8 @@
+ val outgoingVariants = arrayOf("runtimeElements", "apiElements", "sourcesElements", "javadocElements")
+@@ -183,_,7 @@
  
  tasks.withType<Javadoc>().configureEach {
      val options = options as StandardJavadocDocletOptions
-+    options.addStringOption("-add-modules", "jdk.incubator.vector")
-+    options.addStringOption("Xdoclint:none", "-quiet")
-     options.overview = "../paper-api/src/main/javadoc/overview.html"
+-    options.overview = "src/main/javadoc/overview.html"
++    options.overview = "../paper-api/src/main/javadoc/overview.html"
      options.use()
      options.isDocFilesSubDirs = true
+     options.links(
+@@ -217,_,11 @@
+     }
+ 
+     // workaround for https://github.com/gradle/gradle/issues/4046
+-    inputs.dir("src/main/javadoc").withPropertyName("javadoc-sourceset")
++    inputs.dir("../paper-api/src/main/javadoc").withPropertyName("javadoc-sourceset")
+     val fsOps = services.fileSystemOperations
+     doLast {
+         fsOps.copy {
+-            from("src/main/javadoc") {
++            from("../paper-api/src/main/javadoc") {
+                 include("**/doc-files/**")
+             }
+             into("build/docs/javadoc")
