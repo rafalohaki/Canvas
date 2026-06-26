@@ -1,13 +1,14 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Spottedleaf <Spottedleaf@users.noreply.github.com>
-Date: Fri, 30 Aug 2024 18:34:32 -0700
-Subject: [PATCH] Add watchdog thread
+From bfbb5daedfec41793df69129971fc5fe4c2b9a8d Mon Sep 17 00:00:00 2001
+From: rafalohaki <rafalohaki@gmail.com>
+Date: Thu, 25 Jun 2026 17:07:56 +0200
+Subject: [PATCH 3/9] Add-watchdog-thread
 
-When regions take too long, having the server print the stacktrace
-of the ticking region should help debug the cause.
+---
+ src/main/java/org/spigotmc/WatchdogThread.java | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/main/java/org/spigotmc/WatchdogThread.java b/src/main/java/org/spigotmc/WatchdogThread.java
-
+index ab6c553f0..5607f4cc8 100644
 --- a/src/main/java/org/spigotmc/WatchdogThread.java
 +++ b/src/main/java/org/spigotmc/WatchdogThread.java
 @@ -156,7 +156,7 @@ public class WatchdogThread extends ca.spottedleaf.moonrise.common.util.TickThre
@@ -19,3 +20,6 @@ diff --git a/src/main/java/org/spigotmc/WatchdogThread.java b/src/main/java/org/
          logger.log(Level.SEVERE, "------------------------------");
  
          logger.log(Level.SEVERE, "Current Thread: " + thread.getThreadName());
+-- 
+2.54.0 (Apple Git-157)
+

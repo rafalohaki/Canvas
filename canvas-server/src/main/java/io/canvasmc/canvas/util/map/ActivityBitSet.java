@@ -33,7 +33,7 @@ public final class ActivityBitSet extends AbstractObjectSet<Activity> {
 
     @Override
     public boolean add(Activity activity) {
-        int mask = 1 << activity.id;
+        int mask = 1 << BuiltInRegistries.ACTIVITY.getId(activity);
         if ((bitset & mask) != 0) return false;
         bitset |= mask;
         dirty = true;
@@ -43,7 +43,7 @@ public final class ActivityBitSet extends AbstractObjectSet<Activity> {
     @Override
     public boolean remove(Object o) {
         if (o instanceof Activity activity) {
-            int mask = 1 << activity.id;
+            int mask = 1 << BuiltInRegistries.ACTIVITY.getId(activity);
             if ((bitset & mask) != 0) {
                 bitset &= ~mask;
                 dirty = true;
@@ -55,7 +55,7 @@ public final class ActivityBitSet extends AbstractObjectSet<Activity> {
 
     @Override
     public boolean contains(Object o) {
-        return (o instanceof Activity activity) && ((bitset & (1 << activity.id)) != 0);
+        return (o instanceof Activity activity) && ((bitset & (1 << BuiltInRegistries.ACTIVITY.getId(activity))) != 0);
     }
 
     @Override

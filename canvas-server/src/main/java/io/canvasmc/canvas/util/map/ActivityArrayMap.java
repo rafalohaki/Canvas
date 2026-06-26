@@ -63,7 +63,7 @@ public final class ActivityArrayMap<V> implements Map<Activity, V> {
 
     @Override
     public V put(Activity key, V value) {
-        int index = findIndex(key.id);
+        int index = findIndex(BuiltInRegistries.ACTIVITY.getId(key));
         if (index >= 0) {
             final V oldValue = v[index];
             if (value == null) {
@@ -74,9 +74,9 @@ public final class ActivityArrayMap<V> implements Map<Activity, V> {
             return oldValue;
         } else if (value != null) {
             ensureCap();
-            k[size] = key.id;
+            k[size] = BuiltInRegistries.ACTIVITY.getId(key);
             v[size] = value;
-            bitset |= (1 << key.id);
+            bitset |= (1 << BuiltInRegistries.ACTIVITY.getId(key));
             size++;
         }
         return null;
@@ -85,7 +85,7 @@ public final class ActivityArrayMap<V> implements Map<Activity, V> {
     @Override
     public V get(Object key) {
         if (key instanceof Activity activity) {
-            int index = findIndex(activity.id);
+            int index = findIndex(BuiltInRegistries.ACTIVITY.getId(activity));
             if (index >= 0) {
                 return v[index];
             }
@@ -106,13 +106,13 @@ public final class ActivityArrayMap<V> implements Map<Activity, V> {
         if (!(key instanceof Activity activity)) {
             return false;
         }
-        return (bitset & 1 << activity.id) != 0;
+        return (bitset & 1 << BuiltInRegistries.ACTIVITY.getId(activity)) != 0;
     }
 
     @Override
     public V remove(Object key) {
         if (key instanceof Activity activity) {
-            int index = findIndex(activity.id);
+            int index = findIndex(BuiltInRegistries.ACTIVITY.getId(activity));
             if (index >= 0) {
                 V oldValue = v[index];
                 removeAtIndex(index);
@@ -325,7 +325,7 @@ public final class ActivityArrayMap<V> implements Map<Activity, V> {
         @Override
         public boolean contains(Object o) {
             if (o instanceof Entry<?, ?> entry && entry.getKey() instanceof Activity activity) {
-                int index = findIndex(activity.id);
+                int index = findIndex(BuiltInRegistries.ACTIVITY.getId(activity));
                 if (index >= 0) {
                     return Objects.equals(v[index], entry.getValue());
                 }

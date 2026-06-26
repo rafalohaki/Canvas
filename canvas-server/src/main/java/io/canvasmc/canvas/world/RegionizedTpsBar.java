@@ -1,6 +1,6 @@
 package io.canvasmc.canvas.world;
 
-import ca.spottedleaf.moonrise.common.time.TickData;
+import ca.spottedleaf.common.time.TickData;
 import com.mojang.datafixers.util.Pair;
 import io.canvasmc.canvas.WorldConfig;
 import io.papermc.paper.threadedregions.RegionizedWorldData;
@@ -48,9 +48,10 @@ public class RegionizedTpsBar extends RegionResourceBar {
     @Override
     void updatePlayerDisplaysAndTick(final Pair<Component, Float> componentAndProgress) {
         for (final ServerPlayer localPlayer : getWorldData().getLocalPlayers()) {
-            localPlayer.canvas$tpsBarDisplay.setDisplay(componentAndProgress.getFirst());
-            localPlayer.canvas$tpsBarDisplay.setProgress(componentAndProgress.getSecond());
-            localPlayer.canvas$tpsBarDisplay.tick();
+            // Canvas - TODO: canvas$tpsBarDisplay not patched
+            // localPlayer.canvas$tpsBarDisplay.setDisplay(componentAndProgress.getFirst());
+            // localPlayer.canvas$tpsBarDisplay.setProgress(componentAndProgress.getSecond());
+            // localPlayer.canvas$tpsBarDisplay.tick();
         }
     }
 

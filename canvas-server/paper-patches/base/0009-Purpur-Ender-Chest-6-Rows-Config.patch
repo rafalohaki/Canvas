@@ -1,11 +1,15 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Dueris <duerismc@gmail.com>
-Date: Tue, 21 Apr 2026 19:46:42 -0700
-Subject: [PATCH] Purpur Ender Chest 6 Rows Config
+From 53d6209816331309d9bcf804de252d6d7f981608 Mon Sep 17 00:00:00 2001
+From: rafalohaki <rafalohaki@gmail.com>
+Date: Thu, 25 Jun 2026 17:07:56 +0200
+Subject: [PATCH 9/9] Purpur-Ender-Chest-6-Rows-Config
 
+---
+ .../craftbukkit/inventory/CraftContainer.java       | 13 ++++++++++++-
+ .../craftbukkit/inventory/CraftInventory.java       |  2 +-
+ 2 files changed, 13 insertions(+), 2 deletions(-)
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/CraftContainer.java b/src/main/java/org/bukkit/craftbukkit/inventory/CraftContainer.java
-index 2f41a92465b9da28e026297cc3528898bb1c8412..08f20fd770539a23c9ad2452aae35d164dda4d14 100644
+index 2f41a9246..08f20fd77 100644
 --- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftContainer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/inventory/CraftContainer.java
 @@ -148,8 +148,19 @@ public class CraftContainer extends AbstractContainerMenu {
@@ -30,7 +34,7 @@ index 2f41a92465b9da28e026297cc3528898bb1c8412..08f20fd770539a23c9ad2452aae35d16
              case DISPENSER:
              case DROPPER:
 diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventory.java b/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventory.java
-index 9d5fe6fc727948955d89f9ed5e181185393a9611..5e5a4e48b2a96c355256b8f8bfcc09225d562944 100644
+index 9d5fe6fc7..5e5a4e48b 100644
 --- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventory.java
 +++ b/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventory.java
 @@ -85,7 +85,7 @@ public class CraftInventory implements Inventory {
@@ -42,3 +46,6 @@ index 9d5fe6fc727948955d89f9ed5e181185393a9611..5e5a4e48b2a96c355256b8f8bfcc0922
  
          for (int i = 0; i < this.getSize(); i++) {
              if (i >= items.length) {
+-- 
+2.54.0 (Apple Git-157)
+

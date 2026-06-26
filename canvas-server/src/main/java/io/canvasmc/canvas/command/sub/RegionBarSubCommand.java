@@ -32,8 +32,8 @@ public class RegionBarSubCommand implements SubCommand {
             return;
         }
         final RegionResourceBar.DisplayManager display = switch (barType) {
-            case RAM_BAR -> entityPlayer.canvas$ramBarDisplay;
-            case TPS_BAR -> entityPlayer.canvas$tpsBarDisplay;
+            case RAM_BAR -> null; // Canvas - TODO: entityPlayer.canvas$ramBarDisplay;
+            case TPS_BAR -> null; // Canvas - TODO: entityPlayer.canvas$tpsBarDisplay;
         };
         final RegionResourceBar.Entry current = display.serializeDisplay();
         final RegionResourceBar.Entry updated = new RegionResourceBar.Entry(!current.enabled(), current.placement());
@@ -53,8 +53,8 @@ public class RegionBarSubCommand implements SubCommand {
             return;
         }
         final RegionResourceBar.DisplayManager display = switch (barType) {
-            case RAM_BAR -> entityPlayer.canvas$ramBarDisplay;
-            case TPS_BAR -> entityPlayer.canvas$tpsBarDisplay;
+            case RAM_BAR -> null; // Canvas - TODO: entityPlayer.canvas$ramBarDisplay;
+            case TPS_BAR -> null; // Canvas - TODO: entityPlayer.canvas$tpsBarDisplay;
         };
         final RegionResourceBar.Entry current = display.serializeDisplay();
         final RegionResourceBar.Entry updated = new RegionResourceBar.Entry(current.enabled(), newPlacement);

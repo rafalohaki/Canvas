@@ -1,11 +1,14 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Dueris <duerismc@gmail.com>
-Date: Tue, 21 Apr 2026 20:23:42 -0700
-Subject: [PATCH] Replace Moonrise Executor
+From 0ec7c1b7645f2fb8dc0e2e0d485573962f24646d Mon Sep 17 00:00:00 2001
+From: rafalohaki <rafalohaki@gmail.com>
+Date: Thu, 25 Jun 2026 17:07:56 +0200
+Subject: [PATCH 7/9] Replace-Moonrise-Executor
 
+---
+ .../moonrise/common/util/MoonriseCommon.java  | 105 +++++++++---------
+ 1 file changed, 55 insertions(+), 50 deletions(-)
 
 diff --git a/src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseCommon.java b/src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseCommon.java
-index b9f788693b0c4be48e8a923a3dec50555d135e7e..3c8ee8d7ebf68a0189bf15a69481d2234d3d6123 100644
+index b9f788693..3c8ee8d7e 100644
 --- a/src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseCommon.java
 +++ b/src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseCommon.java
 @@ -14,30 +14,15 @@ public final class MoonriseCommon {
@@ -131,3 +134,6 @@ index b9f788693b0c4be48e8a923a3dec50555d135e7e..3c8ee8d7ebf68a0189bf15a69481d223
  
      public static void haltExecutors() {
          MoonriseCommon.WORKER_POOL.shutdown(false);
+-- 
+2.54.0 (Apple Git-157)
+

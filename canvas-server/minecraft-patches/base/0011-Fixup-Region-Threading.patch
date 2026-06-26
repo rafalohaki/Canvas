@@ -1549,8 +1549,8 @@ index b0da5a9fa114fe57f0f304d6763c655c081c60ab..eca27cccc77d2c491cf0e5f089712f7e
      public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
 +    public final io.canvasmc.canvas.world.entity.EnderPearls pearls; // Canvas - region threading
      // Paper start - improve tick loop
-     public final ca.spottedleaf.moonrise.common.time.TickData tickTimes1s  = new ca.spottedleaf.moonrise.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(1L));
-     public final ca.spottedleaf.moonrise.common.time.TickData tickTimes5s  = new ca.spottedleaf.moonrise.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(5L));
+     public final ca.spottedleaf.common.time.TickData tickTimes1s  = new ca.spottedleaf.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(1L));
+     public final ca.spottedleaf.common.time.TickData tickTimes5s  = new ca.spottedleaf.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(5L));
 @@ -477,7 +477,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      }
      // Paper end - rewrite chunk system

@@ -55,7 +55,7 @@ public class SwordItem extends Item {
                         itemInHand.set(DataComponents.BLOCKS_ATTACKS, BLOCKS_ATTACKS);
                         player.inventoryMenu.broadcastChanges();
                         player.startUsingItem(hand);
-                        player.canvas$isTemporarilyBlocking = true;
+                        // player.canvas$isTemporarilyBlocking = true; // Canvas - TODO
                         return InteractionResult.CONSUME;
                     }
                     // Canvas end - implement sword blocking
@@ -68,9 +68,9 @@ public class SwordItem extends Item {
 
     @Override
     public boolean releaseUsing(final ItemStack stack, final Level level, final LivingEntity entity, final int timeLeft) {
-        if (level.canvasConfig().combat.imitateSwordBlocking && entity instanceof Player player && player.canvas$isTemporarilyBlocking) {
+        if (level.canvasConfig().combat.imitateSwordBlocking && entity instanceof Player player /* && player.canvas$isTemporarilyBlocking */) { // Canvas - TODO
             stack.remove(DataComponents.BLOCKS_ATTACKS);
-            player.canvas$isTemporarilyBlocking = false;
+            // player.canvas$isTemporarilyBlocking = false; // Canvas - TODO
         }
         return super.releaseUsing(stack, level, entity, timeLeft);
     }

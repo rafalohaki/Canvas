@@ -19,6 +19,7 @@ public ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunk
 public net.minecraft.core.Direction VALUES
 public net.minecraft.server.MinecraftServer isRestarting
 public net.minecraft.server.ServerTickRateManager finishTickSprint()V
+public net.minecraft.server.level.PlayerSpawnFinder PLAYER_DIMENSIONS
 public net.minecraft.server.level.ServerChunkCache fullChunks
 public net.minecraft.server.level.ServerChunkCache ticketStorage
 public net.minecraft.server.level.ServerEntity sendDirtyEntityData()V
@@ -26,6 +27,7 @@ public net.minecraft.server.level.ServerPlayer checkRidingStatistics(DDD)V
 public net.minecraft.server.network.ServerCommonPacketListenerImpl keepConnectionAlive()V
 public net.minecraft.server.network.ServerCommonPacketListenerImpl suspendFlushingOnServerThread
 public net.minecraft.server.players.PlayerList SEND_PLAYER_INFO_INTERVAL
+public net.minecraft.server.players.PlayerList players
 public net.minecraft.server.players.PlayerList save(Lnet/minecraft/server/level/ServerPlayer;)V
 public net.minecraft.util.Mth SIN
 public net.minecraft.world.entity.Entity blockPosition
@@ -72,6 +74,7 @@ public net.minecraft.world.ticks.LevelTicks$PosAndContainerConsumer
 public-f ca.spottedleaf.concurrentutil.executor.thread.BalancedPrioritisedThreadPool
 public-f net.minecraft.server.level.ServerPlayer gameMode
 public-f net.minecraft.world.entity.EntityType dimensions
+public-f net.minecraft.world.level.Level levelData
 public-f net.minecraft.world.level.block.state.BlockBehaviour explosionResistance
 public-f net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper ticker
 public-f net.minecraft.world.level.chunk.LevelChunkSection nonEmptyBlockCount

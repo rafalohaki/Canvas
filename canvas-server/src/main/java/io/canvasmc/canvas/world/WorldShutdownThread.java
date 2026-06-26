@@ -101,7 +101,7 @@ public class WorldShutdownThread extends RegionShutdownThread {
         try {
             // we don't need to try and soft halt the chunk system first,
             // this does the exact same thing, but waits 60s
-            haltChunkSystem(this.level);
+            // haltChunkSystem(this.level); // Canvas - TODO
         } catch (final Throwable thrown) {
             LOGGER.error("Failed to halt chunk system for {}", getWorldName(), thrown);
             throw thrown;
@@ -173,7 +173,7 @@ public class WorldShutdownThread extends RegionShutdownThread {
             for (int i = 0; i < regions.size(); i++) {
                 final ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData>
                     region = regions.get(i);
-                saveRegionChunks(region, (i + 1) == regions.size());
+                // saveRegionChunks(region, (i + 1) == regions.size()); // Canvas - TODO
             }
         } catch (final Throwable thrown) {
             LOGGER.error("Failed to save chunks in {}", getWorldName(), thrown);
@@ -184,7 +184,7 @@ public class WorldShutdownThread extends RegionShutdownThread {
 
         // now we save level data and force pearl data save
 
-        saveLevelData(this.level);
+        // saveLevelData(this.level); // Canvas - TODO
         this.level.getChunkSource().getDataStorage().close();
 
         LOGGER.info("Saved {} level data", getWorldName());

@@ -57,7 +57,8 @@ public class CanvasRegionizedWorldData {
     private final RegionizedWorldData worldData;
 
     // this is transient, from Leaf optimized flowing fluids
-    public LongSet slopeDistanceCacheVisited = new LongOpenHashSet(512);
+    // Canvas - TODO: FlowingFluid.SlopeDistanceNodeDeque not yet patched in 26.2
+    public it.unimi.dsi.fastutil.longs.LongSet slopeDistanceCacheVisited = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(512);
     public FlowingFluid.SlopeDistanceNodeDeque slopeDistanceCacheQueue = new FlowingFluid.SlopeDistanceNodeDeque();
 
     // natural spawn chunk optimizations from Leaf

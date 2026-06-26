@@ -20,3 +20,12 @@ build
 
 /*-debug/
 /*-plugin/
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# OS
+.DS_Store

@@ -1,14 +1,29 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Dueris <duerismc@gmail.com>
-Date: Tue, 21 Apr 2026 19:46:53 -0700
-Subject: [PATCH] Fixup Region Threading
+From f50ec648df6fc06d49ae2a735a376fc04b91d003 Mon Sep 17 00:00:00 2001
+From: rafalohaki <rafalohaki@gmail.com>
+Date: Thu, 25 Jun 2026 17:07:56 +0200
+Subject: [PATCH 6/9] Fixup-Region-Threading
 
+---
+ .../moonrise/common/util/TickThread.java      |  59 +++++--
+ src/main/java/io/papermc/paper/SparksFly.java |   8 +-
+ .../ChunkPacketBlockControllerAntiXray.java   |  19 ++-
+ .../org/bukkit/craftbukkit/CraftServer.java   | 149 +++++++++++++++++-
+ .../craftbukkit/CraftServerTickManager.java   |  38 ++---
+ .../org/bukkit/craftbukkit/CraftWorld.java    |  20 ++-
+ .../bukkit/craftbukkit/boss/CraftBossBar.java |  12 +-
+ .../craftbukkit/entity/CraftHumanEntity.java  |   4 +-
+ .../craftbukkit/entity/CraftLivingEntity.java |   2 +-
+ .../craftbukkit/entity/CraftPlayer.java       |  68 ++++++--
+ .../scoreboard/CraftObjective.java            |   7 +
+ .../scoreboard/CraftScoreboard.java           |   6 +-
+ .../scoreboard/CraftScoreboardManager.java    |   9 +-
+ 13 files changed, 312 insertions(+), 89 deletions(-)
 
 diff --git a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
-index 9933517d4671d46530c840b14f559f382c7f46ab..b438e47d517e450978ffb2fc4a0568bb5ceb0262 100644
+index eb9592e32..695baa3f4 100644
 --- a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
 +++ b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
-@@ -147,7 +147,7 @@ public class TickThread extends Thread {
+@@ -146,7 +146,7 @@ public class TickThread extends Thread {
      }
  
      public static boolean isShutdownThread() {
@@ -17,7 +32,7 @@ index 9933517d4671d46530c840b14f559f382c7f46ab..b438e47d517e450978ffb2fc4a0568bb
      }
  
      public static boolean isTickThreadFor(final Level world, final BlockPos pos) {
-@@ -171,10 +171,19 @@ public class TickThread extends Thread {
+@@ -170,10 +170,19 @@ public class TickThread extends Thread {
      }
  
      public static boolean isTickThreadFor(final Level world, final int chunkX, final int chunkZ) {
@@ -40,7 +55,7 @@ index 9933517d4671d46530c840b14f559f382c7f46ab..b438e47d517e450978ffb2fc4a0568bb
          }
          return ((net.minecraft.server.level.ServerLevel)world).regioniser.getRegionAtUnsynchronised(chunkX, chunkZ) == region;
      }
-@@ -209,10 +218,19 @@ public class TickThread extends Thread {
+@@ -208,10 +217,19 @@ public class TickThread extends Thread {
      }
  
      public static boolean isTickThreadFor(final Level world, final int fromChunkX, final int fromChunkZ, final int toChunkX, final int toChunkZ) {
@@ -63,7 +78,7 @@ index 9933517d4671d46530c840b14f559f382c7f46ab..b438e47d517e450978ffb2fc4a0568bb
          }
  
          final int shift = ((net.minecraft.server.level.ServerLevel)world).regioniser.sectionChunkShift;
-@@ -243,10 +261,25 @@ public class TickThread extends Thread {
+@@ -242,10 +260,25 @@ public class TickThread extends Thread {
          if (entity == null) {
              return true;
          }
@@ -92,7 +107,7 @@ index 9933517d4671d46530c840b14f559f382c7f46ab..b438e47d517e450978ffb2fc4a0568bb
                  if (entity instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                      final net.minecraft.server.network.ServerGamePacketListenerImpl possibleBad = serverPlayer.connection;
                      if (possibleBad == null) {
-@@ -265,9 +298,7 @@ public class TickThread extends Thread {
+@@ -264,9 +297,7 @@ public class TickThread extends Thread {
                      return false;
                  }
              }
@@ -103,7 +118,7 @@ index 9933517d4671d46530c840b14f559f382c7f46ab..b438e47d517e450978ffb2fc4a0568bb
              if (entity instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                  // off-main access to server player is never ok, server player is owned by one of global context or region context always
                  return false;
-@@ -286,7 +317,7 @@ public class TickThread extends Thread {
+@@ -285,7 +316,7 @@ public class TickThread extends Thread {
              return false;
          }
  
@@ -113,7 +128,7 @@ index 9933517d4671d46530c840b14f559f382c7f46ab..b438e47d517e450978ffb2fc4a0568bb
          // pass through the check if the entity is removed and we own its chunk
          if (worldData.hasEntity(entity)) {
 diff --git a/src/main/java/io/papermc/paper/SparksFly.java b/src/main/java/io/papermc/paper/SparksFly.java
-index b332645ed65928100f580221d8a9948bc77e362e..8cfabe08364d14db1c7c28b814e69f38a8d490a9 100644
+index b332645ed..8cfabe083 100644
 --- a/src/main/java/io/papermc/paper/SparksFly.java
 +++ b/src/main/java/io/papermc/paper/SparksFly.java
 @@ -42,7 +42,7 @@ public final class SparksFly {
@@ -153,7 +168,7 @@ index b332645ed65928100f580221d8a9948bc77e362e..8cfabe08364d14db1c7c28b814e69f38
  
      public static final class CommandImpl extends Command {
 diff --git a/src/main/java/io/papermc/paper/antixray/ChunkPacketBlockControllerAntiXray.java b/src/main/java/io/papermc/paper/antixray/ChunkPacketBlockControllerAntiXray.java
-index 57e091df075809c3629ba22562053251037917b5..ad1aaee4e70b6501f8a5cf5bf87afe6451714592 100644
+index 57e091df0..ad1aaee4e 100644
 --- a/src/main/java/io/papermc/paper/antixray/ChunkPacketBlockControllerAntiXray.java
 +++ b/src/main/java/io/papermc/paper/antixray/ChunkPacketBlockControllerAntiXray.java
 @@ -186,16 +186,21 @@ public final class ChunkPacketBlockControllerAntiXray extends ChunkPacketBlockCo
@@ -186,7 +201,7 @@ index 57e091df075809c3629ba22562053251037917b5..ad1aaee4e70b6501f8a5cf5bf87afe64
          executor.execute((Runnable) chunkPacketInfo);
      }
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 4d06bd358720961c32cb67823f34aeec162af69e..7577f15bf95a28a318094f23b79105e7e80f0352 100644
+index 999c794f1..4f8ae06bd 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -381,6 +381,18 @@ public final class CraftServer implements Server {
@@ -365,7 +380,7 @@ index 4d06bd358720961c32cb67823f34aeec162af69e..7577f15bf95a28a318094f23b79105e7
 +    // Canvas end - region threading
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServerTickManager.java b/src/main/java/org/bukkit/craftbukkit/CraftServerTickManager.java
-index f147590110205f9896c4dea2e88c4169bd20fabf..1c94a6eb624a5f366803a93e94d1ad855b40c219 100644
+index f14759011..1c94a6eb6 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServerTickManager.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServerTickManager.java
 @@ -16,78 +16,66 @@ final class CraftServerTickManager implements ServerTickManager {
@@ -461,7 +476,7 @@ index f147590110205f9896c4dea2e88c4169bd20fabf..1c94a6eb624a5f366803a93e94d1ad85
      }
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 3a031e14daa45db5c0400ae18637530e9a2aa341..8a38dbb788ca325506f3a351ec9b6bb175184462 100644
+index 3a031e14d..8a38dbb78 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 @@ -1148,12 +1148,13 @@ public class CraftWorld extends CraftRegionAccessor implements World {
@@ -497,7 +512,7 @@ index 3a031e14daa45db5c0400ae18637530e9a2aa341..8a38dbb788ca325506f3a351ec9b6bb1
 +    // Canvas end - region threading
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/boss/CraftBossBar.java b/src/main/java/org/bukkit/craftbukkit/boss/CraftBossBar.java
-index f499c02b2ff2d436fbf7759f1e865e14f5268de7..55370d164a8cb155a6bbde66773de1d38a77a372 100644
+index f499c02b2..55370d164 100644
 --- a/src/main/java/org/bukkit/craftbukkit/boss/CraftBossBar.java
 +++ b/src/main/java/org/bukkit/craftbukkit/boss/CraftBossBar.java
 @@ -86,34 +86,34 @@ public class CraftBossBar implements BossBar {
@@ -542,7 +557,7 @@ index f499c02b2ff2d436fbf7759f1e865e14f5268de7..55370d164a8cb155a6bbde66773de1d3
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
-index bba6a2b1054fbcdacd996380f2a0a64b82839a52..9cf6a3b01aadfa549316d91bac4fa076a7d63286 100644
+index bba6a2b10..9cf6a3b01 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
 @@ -502,6 +502,8 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
@@ -564,20 +579,20 @@ index bba6a2b1054fbcdacd996380f2a0a64b82839a52..9cf6a3b01aadfa549316d91bac4fa076
              location = this.getLocation();
          }
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
-index ec3d28aa9cf72f89bfb5ac54776d2b1e43595fb9..96a29f925b2c57b979b5059ef42a1508e82f1ef9 100644
+index 13f313693..d9a435bf4 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
 @@ -506,7 +506,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
  
      @Override
-     public boolean addPotionEffect(PotionEffect effect, boolean force) {
+     public boolean addPotionEffect(PotionEffect effect) {
 -        org.spigotmc.AsyncCatcher.catchOp("effect add"); // Paper
 +        io.canvasmc.canvas.util.TickGuard.guard(this.entity, "Cannot add potion effect async"); // Canvas - region guards
-         this.getHandle().addEffect(org.bukkit.craftbukkit.potion.CraftPotionUtil.fromBukkit(effect), EntityPotionEffectEvent.Cause.PLUGIN); // Paper - Don't ignore icon
-         return true;
+         return this.getHandle().addEffect(org.bukkit.craftbukkit.potion.CraftPotionUtil.fromBukkit(effect), EntityPotionEffectEvent.Cause.PLUGIN); // Paper - Don't ignore icon
      }
+ 
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index 10e4e20af3505128536e0cd6ea472ef8c372993f..7c9ee464763030de638ba211ec4cad245ad1019a 100644
+index b77dcf27b..96d6efa82 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 @@ -237,7 +237,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
@@ -728,7 +743,7 @@ index 10e4e20af3505128536e0cd6ea472ef8c372993f..7c9ee464763030de638ba211ec4cad24
          this.server.getScoreboardManager().setPlayerBoard(this, craftScoreboard);
      }
 diff --git a/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftObjective.java b/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftObjective.java
-index f1a8529bac83de33d4a27bde60b83877119443d7..1ffc76e5da3d982d4750b825fc1de6f2402f62c4 100644
+index f1a8529ba..1ffc76e5d 100644
 --- a/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftObjective.java
 +++ b/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftObjective.java
 @@ -86,6 +86,7 @@ final class CraftObjective extends CraftScoreboardComponent implements Objective
@@ -753,7 +768,7 @@ index f1a8529bac83de33d4a27bde60b83877119443d7..1ffc76e5da3d982d4750b825fc1de6f2
      @Override
      public int hashCode() {
 diff --git a/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboard.java b/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboard.java
-index b959fe4311fc6cbae3dcc052ef4710f8c8aefec6..674a2f56d6f72be753a55df153eb1c1b1516ee94 100644
+index b959fe431..674a2f56d 100644
 --- a/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboard.java
 +++ b/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboard.java
 @@ -32,7 +32,6 @@ public final class CraftScoreboard implements org.bukkit.scoreboard.Scoreboard {
@@ -795,7 +810,7 @@ index b959fe4311fc6cbae3dcc052ef4710f8c8aefec6..674a2f56d6f72be753a55df153eb1c1b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboardManager.java b/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboardManager.java
-index ab76c7f9bb0a4980a07a4d08c0d3ecadbca9668b..20993546c00c3e75fe327557e5b42319b8e7f453 100644
+index ab76c7f9b..20993546c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboardManager.java
 +++ b/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboardManager.java
 @@ -22,7 +22,7 @@ import org.bukkit.scoreboard.ScoreboardManager;
@@ -835,3 +850,6 @@ index ab76c7f9bb0a4980a07a4d08c0d3ecadbca9668b..20993546c00c3e75fe327557e5b42319
          net.minecraft.world.scores.Scoreboard oldBoard = this.getPlayerBoard(player).getHandle();
          net.minecraft.world.scores.Scoreboard newBoard = scoreboard.getHandle();
          if (oldBoard == newBoard) {
+-- 
+2.54.0 (Apple Git-157)
+

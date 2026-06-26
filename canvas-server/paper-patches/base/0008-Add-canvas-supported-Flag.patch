@@ -1,12 +1,14 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Dueris <duerismc@gmail.com>
-Date: Tue, 21 Apr 2026 20:24:32 -0700
-Subject: [PATCH] Add `canvas-supported` Flag
+From 941d5cfad3a981a29f6e8af37a71e93e9b0c2bc4 Mon Sep 17 00:00:00 2001
+From: rafalohaki <rafalohaki@gmail.com>
+Date: Thu, 25 Jun 2026 17:07:56 +0200
+Subject: [PATCH 8/9] Add-canvas-supported-Flag
 
-This is for plugins that support Paper and it's forks, excluding Folia, but support Canvas. This acts identical to the folia-supported flag.
+---
+ .../paper/plugin/provider/configuration/PaperPluginMeta.java   | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/src/main/java/io/papermc/paper/plugin/provider/configuration/PaperPluginMeta.java b/src/main/java/io/papermc/paper/plugin/provider/configuration/PaperPluginMeta.java
-index fb7c6621e2805f4339c255f6c2e02c55ff4c502e..d43266c40ca6282ef8e4229d166353c983255983 100644
+index fb7c6621e..d43266c40 100644
 --- a/src/main/java/io/papermc/paper/plugin/provider/configuration/PaperPluginMeta.java
 +++ b/src/main/java/io/papermc/paper/plugin/provider/configuration/PaperPluginMeta.java
 @@ -65,6 +65,7 @@ public class PaperPluginMeta implements PluginMeta {
@@ -26,3 +28,6 @@ index fb7c6621e2805f4339c255f6c2e02c55ff4c502e..d43266c40ca6282ef8e4229d166353c9
      }
      // Folia end
  
+-- 
+2.54.0 (Apple Git-157)
+

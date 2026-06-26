@@ -1,12 +1,14 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Nassim Jahnke <nassim@njahnke.dev>
-Date: Sat, 25 Mar 2023 19:03:42 +0100
-Subject: [PATCH] Fix tests by removing them
+From 660742da3bdb3c813d6debdef4fbab178cee8604 Mon Sep 17 00:00:00 2001
+From: rafalohaki <rafalohaki@gmail.com>
+Date: Thu, 25 Jun 2026 17:07:56 +0200
+Subject: [PATCH 2/9] Fix-tests-by-removing-them
 
-We don't care about this one, some commands just need to be removed.
+---
+ .../paper/permissions/MinecraftCommandPermissionsTest.java       | 1 +
+ 1 file changed, 1 insertion(+)
 
 diff --git a/src/test/java/io/papermc/paper/permissions/MinecraftCommandPermissionsTest.java b/src/test/java/io/papermc/paper/permissions/MinecraftCommandPermissionsTest.java
-
+index b9ce8c1a9..007d523a5 100644
 --- a/src/test/java/io/papermc/paper/permissions/MinecraftCommandPermissionsTest.java
 +++ b/src/test/java/io/papermc/paper/permissions/MinecraftCommandPermissionsTest.java
 @@ -37,6 +37,7 @@ public class MinecraftCommandPermissionsTest {
@@ -17,3 +19,6 @@ diff --git a/src/test/java/io/papermc/paper/permissions/MinecraftCommandPermissi
          CraftDefaultPermissions.registerCorePermissions();
          Set<String> perms = collectMinecraftCommandPerms();
  
+-- 
+2.54.0 (Apple Git-157)
+

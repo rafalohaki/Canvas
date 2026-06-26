@@ -30,9 +30,10 @@ public class RegionizedRamBar extends RegionResourceBar {
     @Override
     void updatePlayerDisplaysAndTick(final Pair<Component, Float> componentAndProgress) {
         for (final ServerPlayer localPlayer : getWorldData().getLocalPlayers()) {
-            localPlayer.canvas$ramBarDisplay.setDisplay(componentAndProgress.getFirst());
-            localPlayer.canvas$ramBarDisplay.setProgress(componentAndProgress.getSecond());
-            localPlayer.canvas$ramBarDisplay.tick();
+            // Canvas - TODO: canvas$ramBarDisplay not patched
+            // localPlayer.canvas$ramBarDisplay.setDisplay(componentAndProgress.getFirst());
+            // localPlayer.canvas$ramBarDisplay.setProgress(componentAndProgress.getSecond());
+            // localPlayer.canvas$ramBarDisplay.tick();
         }
     }
 

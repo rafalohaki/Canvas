@@ -7,7 +7,7 @@ import ca.spottedleaf.concurrentutil.executor.thread.BalancedPrioritisedThreadPo
 import ca.spottedleaf.concurrentutil.list.COWArrayList;
 import ca.spottedleaf.concurrentutil.util.LazyRunnable;
 import ca.spottedleaf.concurrentutil.util.Priority;
-import ca.spottedleaf.concurrentutil.util.TimeUtil;
+import ca.spottedleaf.common.util.TimeUtil;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
