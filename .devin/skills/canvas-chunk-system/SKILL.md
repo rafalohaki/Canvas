@@ -177,6 +177,77 @@ instead.
 # Watch: "Region surrounding ... missed deadline" (overload), region split/merge logs
 ```
 
+## Chunk System Profiling
+
+Chunk generation/loading is async (`BalancedChunkSystem.WorkerThread`) and
+feeds region threading — a slow chunk pipeline starves regions of work.
+
+### How to profile chunk generation
+
+1. **Spark global profiler** — `/spark profiler start` while players are
+   spreading/loading chunks. Look for frames in
+   `BalancedChunkSystem`, `OrderedStreamGroup`, `ChunkStatus` generation
+   stages, and `ChunkSerializer`.
+2. **Throughput counters** — patch `0003-Add-chunk-system-throughput-counters`
+   adds counters; grep the console/log for chunk throughput metrics at runtime.
+3. **Per-stream queues** — `OrderedStreamGroup.Queue` is per chunk-load
+   stream; if one stream's queue is deep while others are empty, generation is
+   serialized on a single chunk dependency chain (expected for cascading gen).
+4. **Worker thread count** — `adjustThreadCount(n)` is runtime-safe; raise it
+   if workers are all busy and queues are deep. Watch for context-switch
+   overhead if `n` exceeds cores.
+
+### Identifying bottlenecks
+
+| Symptom | Likely bottleneck |
+|---------|-------------------|
+| Chunks load slowly, workers idle | I/O bound (disk read); check world storage |
+| Workers busy, queues deep | Generation CPU-bound; raise worker count or optimize gen stages |
+| One stream deep, others empty | Cascading chunk dependencies (one chunk needs neighbors) |
+| Region tick starved (no chunks to tick) | Chunk pipeline behind region tick demand |
+| `ConcurrentModificationException` in chunk gen | Wrong-thread access to region data from a gen callback (bug) |
+
+Use Spark's flame graph to see which `ChunkStatus` generation stage dominates
+(features, structures, lighting, carving). See `/canvas-region-profiling` →
+Flame Graph Interpretation, and `/canvas-performance-optimization` (if
+created) for whole-server tuning.
+
+## Load Testing
+
+Stress-test chunk loading with many players to find pipeline limits and
+region split/merge races.
+
+### Stress recipe
+
+1. Start `./gradlew runDev` with `scheduler: AFFINITY`, `threads: -1`.
+2. Connect multiple players (or use a bot client) spread across distant
+   coordinates to force many simultaneous chunk load streams and many regions.
+3. Teleport players rapidly between far-apart locations to trigger mass
+   load/unload and region split/merge.
+4. Watch for:
+   - **Deadline misses** — `"Region surrounding ... missed deadline"` ⇒ region
+     tick starved or overloaded.
+   - **Region split/merge errors** — exceptions in
+     `SchedulerHandler.onRegionSplit` / `onRegionMerge`.
+   - **Chunk gen races** — `IllegalStateException` /
+     `ConcurrentModificationException` from gen callbacks touching region data.
+   - **Ticket leaks** — `REGION_PROFILING_HOLD` or `forced` tickets not
+     released after unload (check via chunk ticket debug commands).
+5. Run for an extended period (10+ min) — intermittent races only surface
+   under sustained load and boundary crossings.
+
+### What to measure
+
+- **Chunk throughput** (chunks/sec) via the `0003` counters — should scale
+  with worker count until I/O or CPU bound.
+- **Region count** — should grow with player spread; if it stays at 1,
+  `gridExponent` may be too large.
+- **TPS** — should stay near 20; drops indicate region overload from too many
+  chunks ticking per region (lower `gridExponent`) or gen stealing CPU from
+  tick threads (worker count too high).
+
+See `/canvas-performance-optimization` (if created) for end-to-end tuning.
+
 ## Pitfalls
 
 1. **Don't cache region references** — regions merge/split dynamically; always look up current region.

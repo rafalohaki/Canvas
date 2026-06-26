@@ -213,6 +213,98 @@ authoritative design document — read it first when modifying profiler code.
 # Test split/merge: move around to trigger region changes during profiling
 ```
 
+## Flame Graph Interpretation
+
+Spark produces flame graphs (stack-sample based). Reading them for region
+threading requires knowing which frames are overhead vs. real work.
+
+### Reading a region-threading flame graph
+
+- **X-axis** = sample count (width = time spent in that frame and its
+  children); **Y-axis** = stack depth (caller at bottom, callee at top).
+- **Width = cost** — a wide frame at any depth means significant time. Look
+  for the widest frames at the top of the stack (the actual work) and at the
+  bottom (the dispatch loop).
+- **Pinned region** — when a region is pinned, the flame graph for that
+  thread equals the pinned region's tick. Interpret it as per-region timing.
+- **Unpinned (global)** — the flame graph aggregates all region scheduler
+  threads; a wide frame may represent work across many regions.
+
+### Key frame families
+
+| Frame family | Meaning | Action if dominant |
+|--------------|---------|--------------------|
+| `Level.tick` / `Level.tickEntities` / `Level.tickBlockEntities` | Real tick work | Optimize the specific entity/TE type |
+| `Entity.tick` / `<EntityType>.tick` | Per-entity tick | Reduce entity count or optimize that entity's logic |
+| `BlockEntity` / `<TEType>.tick` | Tile entity tick | Reduce TEs or optimize TE logic |
+| `io.canvasmc.canvas.tick.*` (poll, steal, link, unlink) | Scheduler overhead | Tune scheduler (see `/canvas-affinity-scheduler` → Performance Tuning) |
+| `ChunkStatus.*` / `BalancedChunkSystem` | Chunk generation (async thread) | Tune chunk system (see `/canvas-chunk-system`) |
+| `synchronized` / `ReentrantLock` frames | Lock contention | Reduce lock scope or eliminate cross-region locks |
+| `Thread.onSpinWait` / `Thread.park` | Idle/waiting | Usually fine; if a tick thread is parked while regions are overloaded, work stealing may be disabled |
+
+### Common misreads
+
+- A wide `Level.tick` frame is **not** a bug — it's the tick doing its job.
+  Drill into its children to find the expensive entity/TE.
+- Scheduler overhead frames (`tick.*`) are expected in small amounts; only
+  act if they dominate (> ~10% of the tick budget).
+- Chunk-gen frames appear on `BalancedChunkSystem.WorkerThread`, not on
+  region tick threads — don't confuse async gen cost with tick cost.
+
+## Bottleneck Detection
+
+Common bottleneck patterns and how to identify them from profiling data.
+
+| Bottleneck | Flame graph signature | Fix |
+|------------|----------------------|-----|
+| Single expensive entity type | Wide `<EntityType>.tick` frame | Reduce count, optimize tick logic, or spread across regions |
+| Tile entity explosion | Wide `BlockEntity` / `<TEType>` frame | Limit TEs per chunk, optimize TE tick |
+| Lock contention | Wide `synchronized`/`ReentrantLock` frame on a tick thread | Narrow lock scope, use concurrent structures, eliminate cross-region locks |
+| Scheduler overhead | Wide `tick.*` (poll/steal) frames | Tune `stealThresholdMillis`, `gridExponent`, thread count |
+| Chunk gen starvation | Region tick threads idle, `BalancedChunkSystem` busy | Raise worker count, reduce gen demand (pre-gen, view distance) |
+| Region imbalance | One pinned thread wide, others narrow | Players clustered — spread them, or lower `gridExponent` for more regions |
+| Async I/O on tick thread | `Socket`/`File`/`DB` frames on a tick thread | Move I/O to `AsyncScheduler` |
+
+### Isolating a bottleneck
+
+1. **Pin the suspected hot region** — `/spark profiler start --region ~ ~`.
+2. **Sample for 30–60s** under typical load.
+3. **Read the flame graph** — find the widest top-level work frame.
+4. **Drill down** — expand into children to find the specific entity/TE/lock.
+5. **Cross-check** with `/spark health` (TPS, MSPT) and region deadline-miss
+   logs.
+
+## Profiling Data Export
+
+Spark supports exporting profiling data for sharing and offline analysis.
+
+### Export methods
+
+- **Spark upload** — `/spark profiler stop` uploads the report to Spark's
+  hosted viewer and returns a URL. Share the URL for review.
+- **Raw export** — Spark can save the raw sample data locally; check
+  `/spark profiler` subcommands (grep current Spark docs for the exact flag —
+  it may shift between Spark versions).
+- **Thread dump export** — `jstack <pid> > dump.txt` for lock/deadlock
+  analysis alongside the Spark report.
+
+### Sharing profiling data
+
+- Include the **Spark URL** in the PR/issue when reporting a performance bug.
+- Include the **server config** (`paper-global.yml` threaded-regions section)
+  so reviewers can reproduce the scheduler setup.
+- Note whether a region was **pinned** during profiling (affects
+  interpretation — pinned = per-region, unpinned = aggregate).
+- For region split/merge issues, include the console logs around the
+  split/merge event.
+
+### Privacy
+
+- Spark uploads include stack traces and thread names — review for sensitive
+  info (plugin names, internal package paths) before sharing publicly.
+- Raw sample data may include world coordinates; redact if the server
+  location is sensitive.
+
 ## Pitfalls
 
 1. **No vanilla profiler** — patch `0008` removed it. Any code referencing `Profiler` won't compile.

@@ -202,6 +202,139 @@ grep -rn "paper-plugin\|PaperPluginYaml" canvas-server/src/minecraft/java/ 2>/de
 # - Scheduler-related errors
 ```
 
+## Plugin Audit Tool
+
+A systematic audit determines whether a plugin is region-threading compatible
+and what migration work it needs.
+
+### Audit procedure
+
+1. **Check `paper-plugin.yml` / `plugin.yml`** — does it declare
+   `folia-supported: true`? If not, Canvas won't load it.
+2. **Grep for legacy scheduler calls**:
+   ```bash
+   grep -rn "Bukkit\.getScheduler\|getScheduler\(\)\.runTask" plugin-src/
+   # Every hit must be migrated to a region scheduler
+   ```
+3. **Grep for main-thread assumptions**:
+   ```bash
+   grep -rn "isPrimaryThread\|Bukkit\.isPrimaryThread" plugin-src/
+   # Every hit is broken — there is no main thread in Canvas
+   ```
+4. **Grep for async world/entity access**:
+   ```bash
+   grep -rn "runTaskAsynchronously\|runAsync\|CompletableFuture" plugin-src/
+   # Check each: does the async body touch world/entity/block data?
+   ```
+5. **Grep for cached entity/world references**:
+   ```bash
+   grep -rn "private.*Entity\|private.*World\|static.*Entity" plugin-src/
+   # Cached references may cross region boundaries between uses
+   ```
+6. **Audit event handlers** — do they access data outside the event's region?
+   (e.g. a block-break handler reading a distant chunk.)
+7. **Audit commands** — commands run on the global region; region-specific
+   work must be scheduled.
+8. **Run with `./gradlew runDev`** — load the plugin, watch for
+   `IllegalStateException`, `"not supported on Folia"`, scheduler errors.
+
+### Audit report format
+
+Produce a report per plugin:
+- **Compatible as-is** — already uses region schedulers, declares
+  `folia-supported: true`.
+- **Needs migration** — list each broken pattern with file:line and the
+  required scheduler replacement.
+- **Incompatible** — relies on a single main thread in a way that can't be
+  migrated without a rewrite (e.g. global mutable state touched from every
+  event).
+
+See `/canvas-plugin-testing` (if created) for automated plugin compatibility
+test harnesses.
+
+## Common Plugin Migration Patterns (concrete examples)
+
+Beyond the basic scheduler swaps, these concrete patterns recur across
+plugins migrating to Canvas.
+
+### Pattern: Global state cache updated from events
+
+```java
+// BEFORE — assumes single thread, no synchronization
+private static final Map<UUID, PlayerData> CACHE = new HashMap<>();
+@EventHandler void onJoin(PlayerJoinEvent e) { CACHE.put(e.getPlayer().getUniqueId(), load(e.getPlayer())); }
+@EventHandler void onQuit(PlayerQuitEvent e) { CACHE.remove(e.getPlayer().getUniqueId()); }
+```
+**Problem**: `HashMap` touched by multiple region threads (join/quit events
+fire on the player's region thread) → `ConcurrentModificationException` /
+silent corruption.
+**Fix**: Use `ConcurrentHashMap`, or partition the cache per-world/region.
+```java
+private static final ConcurrentHashMap<UUID, PlayerData> CACHE = new ConcurrentHashMap<>();
+```
+
+### Pattern: Scheduled repeating task touching a fixed location
+
+```java
+// BEFORE
+Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+    world.getBlockAt(x, y, z).setType(Material.STONE);
+}, 0L, 20L);
+```
+**Fix**: `RegionScheduler.runAtFixedRate` with the location.
+```java
+Bukkit.getRegionScheduler().runAtFixedRate(plugin, new Location(world, x, y, z), task -> {
+    world.getBlockAt(x, y, z).setType(Material.STONE);
+}, 0L, 20L);
+```
+
+### Pattern: Async DB query then apply to entity
+
+```java
+// BEFORE
+Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+    var data = db.query(player.getUniqueId());
+    Bukkit.getScheduler().runTask(plugin, () -> player.sendMessage(data));
+});
+```
+**Fix**: Async for the query, `EntityScheduler` for the apply (follows the
+entity across regions).
+```java
+Bukkit.getAsyncScheduler().runNow(plugin, task -> {
+    var data = db.query(player.getUniqueId());
+    player.getScheduler().execute(plugin, () -> player.sendMessage(data), null, 1L);
+});
+```
+
+### Pattern: Block physics / redstone loop
+
+```java
+// BEFORE — runs on main thread, touches blocks across the world
+for (Block b : blocks) b.getState().update();
+```
+**Fix**: Each block update must run on the region owning that block. Group
+blocks by region and schedule per-region, or schedule each via
+`RegionScheduler.execute(loc, ...)`.
+```java
+for (Block b : blocks) {
+    Bukkit.getRegionScheduler().execute(b.getLocation(), () -> b.getState().update());
+}
+```
+
+### Pattern: Cross-region teleport with post-teleport work
+
+```java
+// BEFORE
+player.teleport(loc);
+Bukkit.getScheduler().runTaskLater(plugin, () -> player.sendMessage("Arrived!"), 10L);
+```
+**Fix**: Use `EntityScheduler` for the teleport and the follow-up — the
+entity may cross region boundaries on teleport.
+```java
+player.getScheduler().execute(plugin, () -> player.teleport(loc), null, 1L);
+player.getScheduler().runDelayed(plugin, task -> player.sendMessage("Arrived!"), null, 10L);
+```
+
 ## Pitfalls
 
 1. **`folia-supported: true` is required** — without it, Canvas won't load the

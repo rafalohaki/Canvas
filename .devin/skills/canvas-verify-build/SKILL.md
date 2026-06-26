@@ -152,11 +152,83 @@ For local CI parity (mirror what GitHub Actions would run):
 - See `/canvas-pr-workflow` for the GitHub Actions workflow setup (build +
   upstream-check).
 
+### Stage `ci` — GitHub Actions CI verification
+
+When invoked with `ci` stage, run the exact commands GitHub Actions executes:
+
+```bash
+# 1. Clean + apply (CI always starts fresh)
+./gradlew clean
+./gradlew applyAllPatches --no-configuration-cache
+
+# 2. AT verification — check all 4 AT files are present and valid
+test -f build-data/canvas.at     || echo "MISSING: canvas.at"
+test -f build-data/folia.at      || echo "MISSING: folia.at"
+test -f build-data/paperApi.at   || echo "MISSING: paperApi.at"
+test -f build-data/paperServer.at || echo "MISSING: paperServer.at"
+
+# 3. Compile both subprojects
+./gradlew :canvas-api:compileJava :canvas-server:compileJava
+
+# 4. Tests
+./gradlew test
+
+# 5. Rebuild patches (confirms no drift)
+./rbp.sh
+
+# 6. Build distributable
+./gradlew createPaperclipJar
+
+# 7. Check for unexpected rejects
+test -z "$(ls -A canvas-server/minecraft-patches/rejected/ 2>/dev/null)" \
+  && echo "No rejects" || echo "REJECTS FOUND"
+```
+
+CI runs with `--no-configuration-cache` for all apply tasks (fresh state).
+
 ## Fast Feedback Loop During Work
 
 While iterating:
 - Edit → `applyAllPatches --no-configuration-cache` → compileJava (fast)
 - Only full test + rbp when you think you're done with the change.
+
+## Flaky Test Detection
+
+Tests that pass and fail intermittently are common in region-threaded code.
+Identify and handle them:
+
+### Signs of flakiness
+- Test passes on re-run without code changes.
+- Test fails only on parallel execution (`--parallel`) but passes serially.
+- Test fails only on CI but passes locally (or vice versa).
+- Test involves threading, scheduling, or timing-dependent assertions.
+- Test uses `Thread.sleep()` or fixed-time waits.
+
+### Detection workflow
+```bash
+# Run a specific test class multiple times
+./gradlew test --tests "io.canvasmc.canvas.SomeTest" -Dtest.repeat=10
+
+# Run with parallel execution (exposes race conditions)
+./gradlew test --parallel
+
+# Run with a fresh apply state (rules out stale cache)
+rm -rf canvas-server/.gradle/caches/paperweight/taskCache/runCanvasSetup/
+./gradlew applyAllPatches --no-configuration-cache
+./gradlew test
+```
+
+### Handling flaky tests
+1. **Document** — add a `@Disabled("flaky: <description>")` with a TODO and
+   the file:line of the race condition.
+2. **Fix the race** — prefer fixing over disabling. Common fixes:
+   - Replace `Thread.sleep()` with proper scheduler synchronization.
+   - Use `await()` with timeout instead of fixed waits.
+   - Ensure region-owned data is accessed on the correct tick thread.
+3. **Quarantine** — if can't fix immediately, move to a `@Disabled` test class
+   and track in `roadmap.md`.
+4. **Never dismiss as "flaky" without evidence** — run at least 3 times to
+   confirm intermittent behavior. If it fails consistently, it's a real bug.
 
 ## Common Failures & Fixes
 
@@ -168,6 +240,8 @@ While iterating:
 - rbp.sh complains about folia tasks → old rbp.sh. Fix it first.
 - `createPaperclipJar` fails after a patch change → a patch header or
   numbering issue; run `./rbp.sh --force` and re-check.
+- `folia.at not found` → `build-data/folia.at` missing. Create it (absorbed
+  from upstream Canvas) or sync from upstream.
 
 ## Exit Criteria for "This Change is Complete"
 

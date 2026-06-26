@@ -25,9 +25,11 @@ ATs are **more rebase-safe** than patches for visibility changes.
 
 ## File Layout
 
-- `build-data/canvas.at` — our additions (87 lines, 85 declarations). Edit this.
+- `build-data/canvas.at` — Canvas-original ATs (our additions). Edit this.
+- `build-data/folia.at` — Folia-originated ATs (absorbed from upstream Canvas).
+  Edit this for Folia-specific visibility changes.
 - `build-data/paperApi.at`, `paperServer.at` — upstream Paper, do not edit.
-- Total effective ATs = paper + canvas.
+- Total effective ATs = paper + canvas + folia.
 
 ## AT Syntax
 
@@ -68,6 +70,127 @@ reassigned. See `build-data/canvas.at:3` for `default-f` example,
 - Field ATs need only the field name, no descriptor
 - One member per line
 - Comments with `#` are optional but encouraged
+
+## folia.at vs canvas.at
+
+Canvas now has two editable AT files. Use the correct one:
+
+| File | What goes here | Origin |
+|------|----------------|--------|
+| `build-data/folia.at` | Visibility changes that Folia patches expected (e.g., `ThreadedRegionizer` fields, `TickThread` internals) | Folia-origin, absorbed from upstream Canvas |
+| `build-data/canvas.at` | Canvas-original visibility changes (our own additions not from Folia) | Canvas-original |
+
+### Rules
+- **Folia-originated ATs → `folia.at`** — if the visibility change exists in
+  Folia's codebase or was part of Folia's patch set, it goes in `folia.at`.
+- **Canvas-original ATs → `canvas.at`** — if we invented the need for the
+  visibility change (no Folia precedent), it goes in `canvas.at`.
+- **Never duplicate** — if an entry exists in `folia.at`, don't also add it
+  to `canvas.at`. See "AT Deduplication" below.
+- **Provenance matters** — keeping Folia ATs separate makes upstream Canvas
+  sync easier (we can diff `folia.at` against upstream's version).
+- **Both are applied in `runCanvasSetup`** — there's no ordering difference.
+  Both files contribute to the POST-AT state before base patches.
+
+### How to decide
+```bash
+# Check if Folia has this visibility change
+grep "<member>" build-data/folia.at
+# If yes → it's Folia-origin, keep/update in folia.at
+# If no → it's Canvas-original, put in canvas.at
+```
+
+## AT Deduplication
+
+Detect and remove duplicate AT entries across files:
+
+### Detection
+```bash
+# Find duplicate entries across all AT files
+# Extract just the class+member (ignore modifier and comment)
+sort build-data/canvas.at build-data/folia.at | \
+  grep -v "^#" | grep -v "^$" | \
+  awk '{print $2, $3, $4}' | sort | uniq -d
+
+# Check if a specific member is in multiple files
+grep "<ClassName> <member>" build-data/canvas.at build-data/folia.at build-data/paperApi.at build-data/paperServer.at
+```
+
+### Common duplication scenarios
+1. **Same entry in `canvas.at` and `folia.at`** — pick one based on origin
+   (see "folia.at vs canvas.at"). Remove the duplicate.
+2. **Same entry in `canvas.at` and `paperServer.at`** — upstream Paper added
+   the visibility change. Remove our entry (it's now redundant). See "AT
+   Validation" below.
+3. **Same member, different modifier** (e.g., `public` in `canvas.at`,
+   `public-f` in `folia.at`) — pick the one with the needed modifier. If
+   both are needed, keep the more permissive one and document why.
+
+### Cleanup procedure
+1. Identify duplicates (commands above).
+2. For each duplicate, determine which file should keep the entry (origin rule).
+3. Remove from the other file.
+4. Clean cache + re-apply:
+   ```bash
+   rm -rf canvas-server/.gradle/caches/paperweight/taskCache/runCanvasSetup/
+   ./gradlew applyAllPatches --no-configuration-cache
+   ```
+5. Compile + test to confirm nothing broke.
+6. Rebuild affected base patches if needed.
+
+## AT Validation
+
+Verify that AT entries are still needed (the target may already be public in
+upstream source):
+
+### Validation procedure
+For each AT entry, check if the target is already public/protected in the
+upstream source (without our AT):
+
+```bash
+# 1. Apply only Paper (no Canvas ATs) to see upstream visibility
+#    Temporarily comment out the AT line, clean cache, re-apply
+#    Then check the field/method modifier in applied source
+
+# 2. Check the modifier in the applied source
+grep -n "<member>" canvas-server/src/minecraft/java/<path-to-file>
+# Look at the declaration — is it already public/protected?
+
+# 3. If already public → remove the AT entry (redundant)
+# 4. If still private → keep the AT entry (still needed)
+```
+
+### Batch validation
+```bash
+# For each line in canvas.at (non-comment, non-empty):
+while IFS= read -r line; do
+  [[ "$line" =~ ^# ]] && continue
+  [[ -z "$line" ]] && continue
+  class=$(echo "$line" | awk '{print $2}')
+  member=$(echo "$line" | awk '{print $3}')
+  echo "Checking: $class $member"
+  # Find the file and check visibility
+  filepath=$(echo "$class" | tr '.' '/' | sed 's|^|canvas-server/src/minecraft/java/|;s|$|.java|')
+  grep -n "$member" "$filepath" 2>/dev/null | head -1
+done < build-data/canvas.at
+```
+
+### When to validate
+- **After every Paper upstream sync** — upstream may have changed visibility.
+- **After every MC version migration** — new versions often refactor visibility.
+- **Quarterly health check** — even without upstream changes, validate
+  periodically.
+- **Before a release** — remove redundant ATs to keep the file clean.
+
+### What to do with redundant ATs
+1. Remove the line from the AT file.
+2. Check if any patches/code depend on the AT (they shouldn't if it's
+   already public, but verify):
+   ```bash
+   grep -rn "<member>" canvas-server/src/minecraft/java/ canvas-server/minecraft-patches/
+   ```
+3. Clean cache + re-apply + compile + test.
+4. Document the removal in `roadmap.md`.
 
 ## When to Use AT vs Source Patch
 

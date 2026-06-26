@@ -222,6 +222,104 @@ ls canvas-server/minecraft-patches/rejected/ 2>/dev/null
 - **Skipping verification** — "it compiles" is not enough. Apply → compile
   → test → rebuild → check rejects.
 
+## Architecture Migration Patterns
+
+When moving from one architecture base to another (e.g., Folia-based →
+Paper-based), follow these patterns:
+
+### Assess the scope
+- Map all patches that depend on the old architecture.
+- Identify ATs that replicate the old architecture's visibility changes.
+- Check if the new base already provides some of the changes (avoid duplicates).
+
+### Absorb patches incrementally
+- Don't migrate everything at once — one patch at a time, verify each.
+- Apply on POST-AT state so visibility changes are already in place.
+- Strip `index` lines from patches imported from the old architecture
+  (blob hashes don't exist in the new base).
+- Regenerate with `git format-patch` from POST-AT for correct `index` lines.
+
+### Handle AT migration
+- Move visibility changes from patches to AT files where possible.
+- Folia-originated ATs → `build-data/folia.at`
+- Canvas-original ATs → `build-data/canvas.at`
+- See "AT Migration" pattern below.
+
+### Update documentation
+- `roadmap.md` — ADR entry for the migration.
+- `AGENTS.md` — patch layout table if counts change.
+- Affected skills — architecture map, threading, scheduler.
+
+## Patch Merging
+
+When to merge multiple small patches into one:
+
+### Triggers
+- Upstream Canvas merged patches (e.g., 14→7 base patches) and we want to
+  stay aligned with their structure.
+- Several patches always fail/succeed together — merging reduces rebase
+  surface area.
+- Patches share the same logical concern but were split prematurely.
+- Patch count is growing and maintenance burden is increasing.
+
+### Procedure
+```bash
+# 1. Apply all patches to get clean source
+./gradlew applyAllPatches --no-configuration-cache
+
+# 2. Go to the POST-AT cache repo
+cd canvas-server/.gradle/caches/paperweight/taskCache/runCanvasSetup/
+
+# 3. Apply the patches you want to merge (in order)
+git am --3way 0001-First.patch
+git am --3way 0002-Second.patch
+
+# 4. Squash into one commit
+git reset --soft HEAD~2
+git commit -m "Merged: First + Second — <unified description>"
+
+# 5. Generate the merged patch
+git format-patch -1 HEAD -o canvas-server/minecraft-patches/base/{canvas,local}/
+
+# 6. Rename to the correct number, renumber subsequent patches
+# 7. Update AGENTS.md patch layout table
+# 8. Full verification pipeline
+```
+
+### When NOT to merge
+- Patches touch different subsystems that evolve independently.
+- One patch is `canvas/` and another is `local/` — don't cross partitions.
+- Upstream might split them again — merging creates divergence.
+
+## AT Migration
+
+When to move patch-based access changes to an AT file:
+
+### Triggers
+- A visibility change (private→public) is inlined in a patch hunk and keeps
+  conflicting on rebase.
+- Multiple patches need the same visibility change — AT is one line vs N
+  patch hunks.
+- Upstream changed visibility of a member we're patching — AT is easier to
+  update than regenerating patch hunks.
+
+### Procedure
+1. Identify the member: `grep -rn "private\|protected" <file>` in the patch.
+2. Add an AT line to the appropriate file:
+   - Folia-originated → `build-data/folia.at`
+   - Canvas-original → `build-data/canvas.at`
+3. Remove the visibility change from the patch hunk (keep the behavior change).
+4. Clean the runCanvasSetup cache: `rm -rf canvas-server/.gradle/caches/paperweight/taskCache/runCanvasSetup/`
+5. Re-apply: `./gradlew applyAllPatches --no-configuration-cache`
+6. Regenerate affected base patches from POST-AT state.
+7. Verify: compile + test + rbp.
+
+### When NOT to migrate to AT
+- The change is more than visibility (behavior, logic) — keep in patch.
+- The member is added by our patch (not upstream) — AT only applies to
+  existing upstream members.
+- See `/canvas-at-guard` for the full AT vs patch decision matrix.
+
 ## Cross-References
 
 - `/canvas-at-guard` — AT syntax, modifier options, POST-AT dependency cycle

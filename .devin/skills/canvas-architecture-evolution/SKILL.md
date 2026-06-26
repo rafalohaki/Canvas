@@ -260,6 +260,101 @@ When a change breaks existing behavior or API:
    ./rbp.sh
    ```
 
+## Migration Playbook (MC Version Migration)
+
+Concrete steps for migrating Canvas to a new Minecraft version (e.g.,
+26.2→26.3). This is the highest-risk operation — plan carefully.
+
+### Phase 1: Assessment (before touching anything)
+1. **Read upstream Paper's migration notes** — DeepWiki
+   (`PaperMC/Paper`, "What changed in MC 26.3?") + Paper's CHANGES file.
+2. **Check upstream Canvas** — has CraftCanvasMC/Canvas started the migration?
+   `git fetch upstream && git log upstream/main --oneline -20`
+3. **Assess API breakage** — grep for MC-version-sensitive APIs:
+   ```bash
+   grep -rn "26\.2\|1\.21" canvas-api/ canvas-server/minecraft-patches/
+   grep -rn "mcVersion\|apiVersion" gradle.properties
+   ```
+4. **Estimate effort** — count patches likely affected:
+   ```bash
+   # Patches touching files that changed in the new version
+   grep -rl "<changed-files>" canvas-server/minecraft-patches/
+   ```
+
+### Phase 2: Preparation
+1. Create a migration branch: `git checkout -b ver/26.3-migration`
+2. Bump `mcVersion` and `apiVersion` in `gradle.properties`.
+3. Update `paperCommit` to the Paper commit for the new MC version.
+4. Run `./gradlew applyAllPatches --no-configuration-cache` — expect rejects.
+5. Document the initial reject count in `roadmap.md`.
+
+### Phase 3: Patch Roulette (fix rejects)
+1. Run `./pre_update.sh` to enable git file patches and move source patches.
+2. For each rejected base patch:
+   - `git am --abort`, `git apply --rej <patch>`, fix `.rej` files.
+   - Regenerate with `git format-patch` from POST-AT state.
+3. For each rejected source patch:
+   - Fix hunk context/line numbers in `canvas-server/minecraft-patches/rejected/`.
+   - Move back to `sources/` and re-apply.
+4. Run `./prepare_for_patch_roulette.sh` when done.
+
+### Phase 4: AT Updates
+1. Check if upstream Paper changed visibility of AT'd members:
+   ```bash
+   grep -f build-data/canvas.at canvas-server/src/minecraft/java/ -rn
+   ```
+2. Remove ATs that are now public in upstream (see `/canvas-at-guard` → AT Validation).
+3. Add new ATs for members that became private in the new version.
+4. Clean cache + re-apply after AT changes.
+
+### Phase 5: Verification
+1. `./gradlew applyAllPatches --no-configuration-cache` — zero rejects.
+2. `./gradlew :canvas-api:compileJava :canvas-server:compileJava` — compiles.
+3. `./gradlew test` — all tests pass (investigate every failure).
+4. `./gradlew runDev` — server starts, basic functionality works.
+5. `./rbp.sh` — patches regenerate cleanly.
+6. `./gradlew createPaperclipJar` — distributable jar builds.
+
+### Phase 6: Documentation
+1. Update `roadmap.md` with a migration ADR.
+2. Update `AGENTS.md` — new `mcVersion`, `paperCommit`, patch counts.
+3. Update `/canvas-architecture-map` — structure, counts, key patches.
+4. Update all affected skills.
+
+## Deprecation Timeline
+
+How to phase out old APIs safely without breaking plugins:
+
+### Stage 1: Deprecation announcement
+- Add `@Deprecated(forRemoval = true, since = "<version>")` to the API.
+- Add `@Deprecated` in the patch with a `// Canvas start - deprecate` marker.
+- Document in `roadmap.md` — note the replacement API and target removal version.
+- Log a warning when the deprecated API is called:
+  ```java
+  // Canvas start - deprecation warning
+  if (CanvasConfig.deprecationWarnings) {
+      LOGGER.warn("Deprecated API called: {} — use {} instead", methodName, replacement);
+  }
+  // Canvas end - deprecation warning
+  ```
+
+### Stage 2: Grace period (1-2 MC versions)
+- Keep the deprecated API functional.
+- Monitor usage via the warning logs.
+- Update `/canvas-plugin-compat` with migration guidance for plugin devs.
+
+### Stage 3: Removal
+- Remove the deprecated API in a dedicated base patch.
+- Update all internal callers to the replacement.
+- Document the removal in `roadmap.md` as a breaking change ADR.
+- Bump `apiVersion` if the API was in the public surface.
+- Test with `runDev` — load test plugins that may use the old API.
+
+### Timeline guidelines
+- Minor API changes: deprecate in N, remove in N+1.
+- Major API changes: deprecate in N, remove in N+2 (one full MC cycle).
+- Never remove without a deprecation cycle — plugins break silently.
+
 ## Cross-References
 
 - `/canvas-refactor-patterns` — safe refactoring patterns, impact assessment
@@ -270,6 +365,7 @@ When a change breaks existing behavior or API:
 - `/canvas-region-threading` — threading rules (non-negotiable)
 - `/canvas-affinity-scheduler` — CRS scheduler internals
 - `/canvas-chunk-system` — chunk system architecture
+- `/canvas-migration-patterns` — concrete migration patterns (Folia→Paper, patch merging, AT migration)
 
 Sources: DeepWiki (Canvas CRS scheduler — EDF, task pinning, work stealing;
 Weaver task flow — AT application order, base patch mechanism), `roadmap.md`

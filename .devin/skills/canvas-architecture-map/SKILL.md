@@ -35,6 +35,7 @@ Canvas/
 │
 ├── build-data/
 │   ├── canvas.at             # Our ATs (applied in runCanvasSetup before base patches)
+│   ├── folia.at              # Folia-originated ATs (absorbed from upstream Canvas)
 │   ├── paperApi.at
 │   └── paperServer.at
 │
@@ -173,7 +174,30 @@ grep -A 5 "Phase 3b" roadmap.md
 
 This map is a snapshot. Canvas is actively migrating (Folia→Paper absorbed).
 When the architecture changes:
-1. Update `roadmap.md`
-2. Update `AGENTS.md` patch layout table
-3. Update this skill's structure map
-4. Grep to confirm package locations before citing them
+
+### Patches added
+1. Update the patch count in the structure map above (base/sources/features).
+2. Update `AGENTS.md` patch layout table.
+3. Update `roadmap.md` with the new patch and its purpose.
+4. Add the patch to the "Key Base Patches" table if it's a base patch.
+5. Grep to confirm package locations before citing them.
+
+### Patches removed
+1. Remove from the structure map and "Key Base Patches" table.
+2. Renumber subsequent patches (base patches must be sequential).
+3. Update `AGENTS.md` patch layout table.
+4. Update `roadmap.md` — note the removal and rationale.
+5. Check if any ATs became unnecessary (see `/canvas-at-guard` → AT Validation).
+
+### Patches merged
+1. Update the structure map with the new merged patch count.
+2. Update the "Key Base Patches" table — remove old entries, add the merged one.
+3. Renumber if the merge changes sequence positions.
+4. Update `AGENTS.md` patch layout table.
+5. Update `roadmap.md` with an ADR entry documenting the merge rationale.
+6. Regenerate all base patches from POST-AT state (`git format-patch`).
+
+### General
+- Always grep to confirm package locations before citing them — they shift.
+- Run `find canvas-server/minecraft-patches/base -name "*.patch" | wc -l` to
+  verify counts match what's documented here.

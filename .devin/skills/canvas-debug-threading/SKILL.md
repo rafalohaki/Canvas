@@ -262,6 +262,150 @@ level.getChunkSource().getChunkState(...).thenRun(() -> {
 # Test with player movement across region boundaries
 ```
 
+## Deadlock Analysis
+
+Deadlocks in region threading usually involve a tick thread blocked on a
+lock held by another tick thread (or an async task), or a pinned runner with
+no other runner to steal work.
+
+### Detecting a deadlock
+
+1. **Watchdog fires** — `FoliaWatchdogThread` logs the hung thread + region
+   and dumps its stack. A deadlock shows multiple threads BLOCKED on locks.
+2. **Thread dump** — `jstack <pid>`; look for a **lock cycle**:
+   - Thread A BLOCKED on lock L1 (held by Thread B)
+   - Thread B BLOCKED on lock L2 (held by Thread A)
+3. **All region threads BLOCKED** — if every `Region Scheduler Thread #N` is
+   BLOCKED, the tick pool is fully deadlocked — the server is effectively hung.
+4. **Pinned runner hang** — if profiling is active and the pinned region's
+   tick hangs, Canvas fail-fasts (server halt) by design; this is not a
+   recoverable deadlock.
+
+### Diagnosing the lock cycle
+
+```bash
+jstack <pid> > dump.txt
+# Find BLOCKED threads and their lock owners
+grep -B2 -A15 "BLOCKED" dump.txt
+# Match "waiting to lock <0x...>" with "locked <0x...>" in another thread
+```
+
+Each `jstack` entry shows `- waiting to lock <0xADDR>` and the lock's owner
+thread id. Trace the cycle: A→B→C→A.
+
+### Common deadlock causes in Canvas
+
+| Cause | Pattern | Fix |
+|-------|---------|-----|
+| Lock across regions | Region A's tick acquires lock L, then schedules on region B (blocks waiting for B's tick) which needs L | Never hold a cross-region lock while scheduling on another region; release before scheduling |
+| `scheduleLock` held during tick | `AffinitySchedulerThreadPool.scheduleLock` held while a tick runs | Don't hold `scheduleLock` during tick execution (Canvas doesn't; verify your additions) |
+| Pinned runner + 1 thread | Profiling pinned the only runner; no runner left for other regions | `doesSupportRegionProfiler()` requires `>= 2` threads; don't override |
+| Sync I/O on tick thread | Tick thread blocks on DB/HTTP holding an implicit region lock | Move I/O to `AsyncScheduler` |
+| `Object.wait()` on tick thread | Tick thread waits for a notify that never comes | Use scheduler-based delays, not `wait()` |
+
+### Fix pattern
+
+Break the cycle by removing one lock dependency. Prefer:
+- **No cross-region locks** — pass data via schedulers/queues (see
+  `/canvas-region-threading` → Cross-Region Communication), not shared locks.
+- **Lock ordering** — if a lock is unavoidable, acquire locks in a consistent
+  global order across all threads.
+- **Timeouts** — use `tryLock(timeout)` instead of `lock()` so a stuck thread
+  logs and recovers instead of hanging forever.
+
+## Race Condition Detection
+
+Races in Canvas usually mean wrong-thread access to region-owned data or
+shared mutable state touched by multiple tick threads without synchronization.
+
+### Patterns for finding races
+
+1. **Set `guardSeverity: THROW`** — surfaces wrong-thread access immediately
+   with a stack trace. `SILENT`/`LOG` hide races.
+2. **Add `TickGuard.guard(...)` / `ensureTickThread`** at suspected access
+   points — the throw pinpoints the offender.
+3. **Stress with boundary crossings** — many races only trigger when a region
+   splits/merges or an entity crosses a boundary. Load-test with movement
+   (see `/canvas-chunk-system` → Load Testing).
+4. **`ConcurrentModificationException`** — a shared collection mutated by two
+   threads. Identify the collection, find all access points, determine which
+   threads. If both are tick threads on different regions, the collection
+   should be region-local, not shared.
+5. **Silent corruption** — duplicated items, desynced blocks, vanished
+   entities. Set `THROW`, add assertions, run until it throws.
+
+### Tools (ThreadSanitizer equivalent)
+
+The JVM has no direct ThreadSanitizer, but these help:
+
+- **`TickGuard` + `THROW` severity** — the primary race detector for
+  region-ownership violations. It's a runtime assertion, not a static analyzer.
+- **`VarHandle` opaque/volatile semantics** — `TickThreadRunner` uses
+  `setOpaque`/`setVolatile` for state transitions. If you add shared state,
+  use the correct memory ordering; a missing volatile is a race.
+- **JCIP annotations (`@GuardedBy`, `@Immutable`)** — grep the source for
+  existing usage; follow the same discipline for new shared state.
+- **`jstack` under load** — repeated thread dumps during stress can reveal
+  threads interleaving on shared state (two threads in the same synchronized
+  block at different times).
+- **Java Flight Recorder (JFR)** — `java -XX:StartFlightRecording=...` can
+  reveal lock contention and allocation hotspots that hint at races.
+- **Static analysis** — SpotBugs / SonarQube can flag unsynchronized shared
+  field access; run them on Canvas source if available.
+
+### Race-prone constructs to audit
+
+- Shared `Map`/`List` across regions (use `ConcurrentHashMap` /
+  `COWArrayList` or make it region-local).
+- `volatile` without immutable payload (visibility ≠ thread-safety for
+  mutable contents).
+- Double-checked locking without `volatile`.
+- Caching `Entity`/`World`/region references across ticks (they move).
+
+## Watchdog Tuning
+
+`FoliaWatchdogThread` (patch `0007`) monitors region tick threads. Tuning
+its thresholds per workload prevents both false alarms and missed hangs.
+
+### Configuration
+
+```bash
+grep -rn "watchdog\|Watchdog" canvas-server/src/minecraft/java/ 2>/dev/null
+grep -rn "watchdog" canvas-server/minecraft-patches/base/0007-*.patch
+```
+
+Find the timeout config key in `paper-global.yml` (grep current source — the
+key name may shift between versions).
+
+### Threshold guidance by workload
+
+| Workload | Timeout | Rationale |
+|----------|---------|-----------|
+| Default survival server | Default (grep source) | Catches true hangs without false alarms on heavy ticks |
+| Heavy-tick server (large farms, many entities) | Raise it | Legitimate ticks may exceed default; avoid false watchdog dumps |
+| Low-population / testing | Lower it | Catches bugs faster in dev; false alarms are acceptable |
+| Profiling active (pinned region) | Keep default | A pinned-region hang triggers fail-fast (server halt), not just a watchdog log — don't raise it to mask real hangs |
+
+### What the watchdog does (and doesn't)
+
+- **Does**: log a warning + dump the hung thread's stack when a region tick
+  exceeds the timeout.
+- **Does NOT** always kill the server — it logs and may continue. A hung
+  thread that never recovers will eventually block all regions (if work
+  stealing is disabled) or degrade throughput.
+- **Pinned region hang** → fail-fast server halt (by design), not just a
+  watchdog log. Don't suppress this.
+
+### Tuning steps
+
+1. Grep the current config key + default value.
+2. Run your typical workload; if watchdog fires on legitimate heavy ticks,
+   raise the threshold.
+3. If it never fires but you suspect hangs, lower it temporarily to surface
+   them.
+4. Pair with `overloadedLogMillis` (region scheduler config) — that catches
+   deadline misses before they become full watchdog timeouts.
+
 ## Pitfalls
 
 1. **Intermittent bugs** — region boundaries shift; a bug may only trigger when a player crosses a boundary. Test with movement.

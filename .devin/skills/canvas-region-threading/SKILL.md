@@ -227,6 +227,128 @@ git diff --staged | grep -E "getScheduler\(\)\.runTask|Bukkit\.getScheduler"
 # These are legacy Bukkit calls that don't exist / don't work in Canvas
 ```
 
+## Async Patterns
+
+Region threading does not eliminate async work — it constrains where the
+results may be applied. Use these patterns for async computation that
+eventually touches region-owned data.
+
+### CompletableFuture usage
+
+`CompletableFuture` is fine for **pure computation** (no world access), but
+the terminal stage that touches region data must hop back onto the owning
+region's tick thread via a scheduler.
+
+```java
+CompletableFuture.supplyAsync(() -> computeExpensivePureValue(executor))
+    .thenCompose(value ->
+        // Hop back to the region owning the target location
+        Bukkit.getRegionScheduler().execute(loc, () -> applyValue(value))
+    );
+```
+
+- **Never** call `world.getX()` / `entity.getX()` inside a `supplyAsync` /
+  `thenApplyAsync` stage — those run on the async executor, not a tick thread.
+- Use `AsyncScheduler.runNow(plugin, task -> ...)` as the async stage if you
+  want Canvas's async pool rather than a raw `ForkJoinPool`.
+- For entity-targeted results, use `entity.getScheduler().execute(...)` as the
+  terminal stage so the apply runs on whatever region the entity is in at that
+  moment.
+
+### Async resource cleanup
+
+Async tasks that open resources (DB connections, HTTP clients, files) must
+clean up in a `whenComplete` or try-finally — the region tick thread will not
+clean up after an async task that was cancelled or threw.
+
+```java
+Bukkit.getAsyncScheduler().runNow(plugin, task -> {
+    try (var conn = dataSource.getConnection()) {
+        // ... pure work, no world access
+    } catch (SQLException e) {
+        LOGGER.warn("async db failure", e);
+    }
+});
+```
+
+### Cancellation patterns
+
+- `AsyncScheduler` tasks return a `ScheduledTask`; call `task.cancel()` to
+  cancel (async tasks are cancellable, unlike AFFINITY tick tasks which throw
+  `UnsupportedOperationException` on `cancel()`).
+- Region/Entity/Global scheduler tasks are **not cancellable** — design them
+  to be short and idempotent instead. If you need cancellation, run the work
+  on `AsyncScheduler` and only hop to a region scheduler for the final apply.
+- For long-running async loops, check `Thread.interrupted()` /
+  `task.isCancelled()` periodically and exit early.
+
+See `/canvas-async-patterns` (if created) for a dedicated async cookbook.
+
+## Cross-Region Communication
+
+Regions are isolated — you cannot directly read another region's data from
+the current region's tick thread. Use these safe channels to pass data
+between regions.
+
+### Schedulers (the primary channel)
+
+The correct way to touch another region's data is to **schedule a task on
+that region's scheduler**. The scheduler ensures the task runs on the owning
+tick thread.
+
+```java
+// Region A's tick thread wants to affect a block in region B
+Bukkit.getRegionScheduler().execute(targetLocation, () -> {
+    // now running on region B's tick thread — safe
+    targetLocation.getBlock().setType(Material.STONE);
+});
+```
+
+### Callbacks (async → region)
+
+When async work completes and needs to update region data, pass the result
+through a scheduler callback (see Async Patterns above). The callback runs on
+the owning region's tick thread.
+
+### Thread-safe queues (for streaming data between regions)
+
+For continuous data flow (e.g. region A produces events that region B
+consumes), use a concurrent queue and have the consumer poll on its own tick:
+
+```java
+// Shared, thread-safe
+ConcurrentLinkedQueue<Event> queue = new ConcurrentLinkedQueue<>();
+
+// Region A produces (on its tick thread)
+queue.offer(event);
+
+// Region B consumes (on its tick thread, each tick)
+Bukkit.getRegionScheduler().runAtFixedRate(plugin, bLoc, task -> {
+    Event e;
+    while ((e = queue.poll()) != null) handle(e);
+}, 1L, 1L);
+```
+
+- Use `ConcurrentLinkedQueue` (unbounded) or `ArrayBlockingQueue` (bounded,
+  backpressure) — never a plain `ArrayList` / `LinkedList` shared across
+  regions.
+- The producer must not access region B's data when enqueuing — only hand off
+  the immutable payload.
+- Payloads passed through the queue **must be immutable** or effectively
+  immutable (copy before enqueue if the producer mutates afterwards).
+
+### What NOT to do
+
+- Don't share a mutable `Map`/`List` of region-owned objects across regions
+  even with a lock — the lock prevents CME but not wrong-thread access
+  exceptions when the contents are touched.
+- Don't use `volatile` references to region-owned data as a cross-region
+  channel — visibility ≠ ownership; touching it from the wrong thread still
+  throws.
+- Don't cache a `TickRegionData` / region reference — regions split/merge;
+  always look up the current region via
+  `regioniser.getRegionAtUnsynchronised(x, z)` and schedule onto it.
+
 ## Pitfalls
 
 1. **`RegionScheduler` for entities** — entities move between regions; use `EntityScheduler`.

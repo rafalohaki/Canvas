@@ -104,6 +104,51 @@ The `canvas-server/build.gradle.kts` and `canvas-api/build.gradle.kts` are
 
 **Do not commit the generated `build.gradle.kts`** — only the `.patch` file.
 
+## AT Files
+
+Canvas uses 4 Access Transformer files in `build-data/`:
+
+| File | Purpose | Edit? |
+|------|---------|-------|
+| `build-data/canvas.at` | Canvas-original ATs | Yes |
+| `build-data/folia.at` | Folia-originated ATs (absorbed from upstream Canvas) | Yes |
+| `build-data/paperApi.at` | Upstream Paper API ATs | No (overwritten on sync) |
+| `build-data/paperServer.at` | Upstream Paper server ATs | No (overwritten on sync) |
+
+All 4 are applied in `runCanvasSetup` before base patches (POST-AT state).
+See `/canvas-at-guard` for syntax and the POST-AT dependency cycle.
+
+## Build Performance
+
+Canvas enables configuration cache, build cache, and parallel execution in
+`gradle.properties`. Tips for faster builds:
+
+### Configuration cache reuse
+- Configuration cache is enabled (`org.gradle.configuration-cache=true`).
+- After a `paperCommit` bump or AT change, always use
+  `--no-configuration-cache` once to rebuild the cache.
+- Subsequent builds reuse the cached configuration graph — much faster.
+- If builds feel stale or wrong, clear the cache:
+  `rm -rf .gradle/configuration-cache`
+
+### Parallel execution
+- `org.gradle.parallel=true` — subprojects build in parallel.
+- `canvas-api` and `canvas-server` compile concurrently when possible.
+- Don't disable parallel unless debugging a race in the build itself.
+
+### Daemon settings
+- Gradle daemon is enabled by default (`org.gradle.daemon=true`).
+- JVM args in `gradle.properties` (`org.gradle.jvmargs`) — increase heap if
+  you see `OutOfMemoryError` during `applyAllPatches`:
+  `org.gradle.jvmargs=-Xmx4G` (or higher for large patch sets).
+- Daemon restarts automatically after `gradle.properties` changes.
+- To force daemon stop: `./gradlew --stop`
+
+### Build cache
+- `org.gradle.caching=true` — task outputs are cached and reused.
+- Combined with configuration cache, incremental builds are very fast.
+- `--no-build-cache` if you suspect a cache corruption issue.
+
 ## Common Build Failures
 
 | Error | Cause | Fix |
@@ -113,6 +158,7 @@ The `canvas-server/build.gradle.kts` and `canvas-api/build.gradle.kts` are
 | `Java 25 not found` | Toolchain not downloaded | `./gradlew --refresh-dependencies` or install JDK 25 |
 | Config-cache stale | Cached task graph outdated | `--no-configuration-cache` |
 | `paperCommit` not found | Bad commit hash in gradle.properties | `./upstream.sh update` |
+| `folia.at not found` | `build-data/folia.at` missing (new AT file) | Ensure `build-data/folia.at` exists — absorbed from upstream Canvas. Create empty file if needed, or sync from upstream. |
 
 ## Verification
 

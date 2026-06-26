@@ -108,6 +108,100 @@ are fine.
 - Only for things we may want to drop later.
 - Otherwise put in `local/` as normal base or source.
 
+## folia.at — Folia-Specific ATs
+
+Folia-specific access transformers go in `build-data/folia.at`, **not**
+`build-data/canvas.at`. This file was absorbed from upstream Canvas and
+contains the visibility changes that Folia patches expected.
+
+- Folia-originated ATs (e.g., making `ThreadedRegionizer` fields public) →
+  `build-data/folia.at`
+- Canvas-original ATs (our own additions) → `build-data/canvas.at`
+- Never put Folia ATs in `canvas.at` — it blurs provenance and makes
+  upstream sync harder.
+- See `/canvas-at-guard` → "folia.at vs canvas.at" for the full guide.
+
+## Patch Merging
+
+When and how to merge multiple patches into one:
+
+### When to merge
+- Upstream Canvas merged patches (e.g., 14→7 base patches) and we want to
+  stay aligned with their structure.
+- Several patches always fail/succeed together — merging reduces the rebase
+  surface.
+- Patches share the same logical concern but were split prematurely.
+
+### How to merge
+```bash
+# 1. Apply all patches to get clean source
+./gradlew applyAllPatches --no-configuration-cache
+
+# 2. Go to the POST-AT cache repo
+cd canvas-server/.gradle/caches/paperweight/taskCache/runCanvasSetup/
+
+# 3. Apply the patches you want to merge (in order)
+git am --3way 0001-First.patch
+git am --3way 0002-Second.patch
+
+# 4. Squash into one commit
+git reset --soft HEAD~2
+git commit -m "Merged: First + Second — <unified description>"
+
+# 5. Generate the merged patch
+git format-patch -1 HEAD -o canvas-server/minecraft-patches/base/{canvas,local}/
+
+# 6. Rename to the correct number, renumber subsequent patches
+# 7. Update AGENTS.md patch layout table
+# 8. Full verification: applyAllPatches → compile → test → rbp
+```
+
+### When NOT to merge
+- Patches touch different subsystems that evolve independently.
+- One patch is `canvas/` and another is `local/` — don't cross partitions.
+- Upstream might split them again — merging creates divergence.
+
+## Cross-Version Patch Porting
+
+How to port a patch from one MC version to another (e.g., 26.2→26.3):
+
+### Base patches
+1. **Read the old patch** — understand what it does and why.
+2. **Find the target file in the new version** — the file may have moved,
+   been renamed, or restructured.
+   ```bash
+   grep -rl "<ClassName>" canvas-server/src/minecraft/java/
+   ```
+3. **Apply manually on POST-AT state** — don't try `git am` directly (context
+   will have drifted):
+   ```bash
+   cd canvas-server/.gradle/caches/paperweight/taskCache/runCanvasSetup/
+   git apply --rej <old-patch>
+   # Fix .rej files — adjust context lines to match new source
+   git add -A
+   git commit -m "<original description> (ported to 26.3)"
+   git format-patch -1 HEAD -o canvas-server/minecraft-patches/base/{canvas,local}/
+   ```
+4. **Check AT dependencies** — the patch may rely on ATs that changed:
+   ```bash
+   grep -f <old-patch> build-data/canvas.at build-data/folia.at
+   ```
+5. **Renumber** — insert at the correct position, renumber subsequent patches.
+
+### Source patches
+1. **Open the old `.patch` file** — note the target file and hunk context.
+2. **Find the file in the new version** — confirm it still exists.
+3. **Adjust hunk line numbers and context** — match the new source.
+4. **Test apply** — `./gradlew applyMinecraftSourcePatches`.
+5. If it rejects, fix in `rejected/` and re-apply.
+
+### General porting tips
+- Strip `index` lines from old patches before porting (blob hashes are
+  version-specific).
+- Use DeepWiki to understand what changed in the target class between versions.
+- Port one patch at a time — verify each before moving to the next.
+- Document porting decisions in the commit message (what changed, why).
+
 ## Dual Upstream Hygiene
 
 - Changes that came from Canvas OG → put resulting patch in `canvas/` subdir.

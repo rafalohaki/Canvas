@@ -277,6 +277,128 @@ jobs:
 - Runs daily; fails when Paper drifts or patches no longer apply cleanly.
 - Pair with `./upstream.sh update` (see `/canvas-upstream-sync`).
 
+## PR Template Generator
+
+A standard PR template with a test-plan checklist ensures every PR communicates
+what changed, why, and how it was verified.
+
+### Standard template
+
+```markdown
+## Summary
+- <What changed and why — one concern per PR>
+
+## Authors
+- <Your name>
+
+## Testing
+- [ ] `./gradlew applyAllPatches --no-configuration-cache` passes
+- [ ] `./gradlew :canvas-api:compileJava :canvas-server:compileJava` passes
+- [ ] `./gradlew test` passes
+- [ ] `./rbp.sh` run (patches reflect source exactly)
+- [ ] `./gradlew runDev` tested: <describe scenario>
+- [ ] Region threading safe (see /canvas-region-threading, /canvas-code-review)
+- [ ] Minimal diff (see /canvas-refactor-patterns)
+- [ ] Patches: correct layer, sequential numbering, no gaps
+- [ ] AI Policy: human-reviewed, no "Generated with Devin" footer
+
+## Notes
+- <Context for reviewers — breaking changes, config migrations, plugin impact>
+```
+
+### Usage with `gh`
+
+```bash
+gh pr create --title "Brief title" --body "$(cat <<'EOF'
+## Summary
+- <what + why>
+
+## Authors
+- <name>
+
+## Testing
+- [x] ./gradlew applyAllPatches --no-configuration-cache passes
+- [x] ./gradlew :canvas-api:compileJava :canvas-server:compileJava passes
+- [x] ./gradlew test passes
+- [x] ./rbp.sh run
+- [x] ./gradlew runDev tested: <scenario>
+- [x] Region threading safe
+- [x] Minimal diff
+- [x] Patches: correct layer, sequential, no gaps
+- [x] AI Policy: human-reviewed, no AI footer
+
+## Notes
+- <context>
+EOF
+)"
+```
+
+### Checklist guidance
+
+- **Check only what you actually did** — unchecked items are a signal to
+  reviewers, not a formality. Don't check all boxes reflexively.
+- **`runDev` scenario** — describe what you tested (e.g. "teleported players
+  across regions, watched for IllegalStateException").
+- **Breaking changes** — note in `## Notes` if plugin authors or server
+  operators need to act (config migration, scheduler API change).
+- **One concern per PR** — if the template's Summary has two unrelated
+  changes, split the PR.
+
+See `/canvas-release-workflow` (if created) for release-specific templates.
+
+## Automated Changelog
+
+Extracting the changelog from commit messages keeps it accurate and
+traceable to PRs.
+
+### Extracting changelog from commits
+
+```bash
+# Commits since the last release tag
+LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null)
+git log --pretty=format:"- %s (%h)" "$LAST_TAG"..HEAD > changelog-since-last.txt
+
+# Or grouped by conventional-commit type (if commits follow a convention)
+git log --pretty=format:"%s" "$LAST_TAG"..HEAD \
+  | grep -E "^(feat|fix|perf|refactor|docs|chore)" \
+  | sort
+```
+
+### Conventional commit style (optional)
+
+If commits follow `type(scope): description`:
+- `feat:` → user-facing feature
+- `fix:` → bug fix
+- `perf:` → performance
+- `refactor:` → internal change (not user-facing)
+- `docs:` → documentation
+- `chore:` → build/tooling
+
+Group the changelog by type; only surface `feat`, `fix`, `perf` to users
+unless a `refactor` is breaking.
+
+### Changelog entry format
+
+```markdown
+## [unreleased]
+### Features
+- Add AFFINITY scheduler CPU affinity option (#123)
+### Fixes
+- Fix region split pinning transfer race (#124)
+### Performance
+- Reduce scheduler poll overhead under balanced load (#125)
+### Breaking
+- `scheduler` config now accepts `AFFINITY` (was `EDF`/`FIFO`) (#126)
+```
+
+- Cite PR numbers (`#NNN`) for traceability.
+- Note config migrations and breaking changes for plugin authors / operators
+  (see `/canvas-config-system` → Config Migration).
+- Summarize user-facing changes; omit pure refactors unless breaking.
+- The full release workflow (version bump, paperclip jar, GitHub release,
+  Maven publishing) is in the **Release Workflow** section above and
+  `/canvas-release-workflow` (if created).
+
 ## Pitfalls
 
 1. **Don't commit generated `build.gradle.kts`** — only the `.patch` file.

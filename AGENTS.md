@@ -61,7 +61,7 @@ Access Transformers: `build-data/canvas.at` (87 lines), `build-data/paperApi.at`
 4. **Verify**: `./gradlew applyAllPatches` → compile → `./gradlew test` → `runDev` if runtime.
 5. **Rebuild**: `./rbp.sh` to regenerate patch files after source edits.
 
-## Skills (20 — future-proof for dual upstream + churn)
+## Skills (25 — future-proof for dual upstream + churn)
 
 Skills live in `.devin/skills/`. Invoke with `/canvas-<name>` (or agent auto-picks).
 Grounded in DeepWiki (CraftCanvasMC/Canvas, PaperMC/Paper) + local source + Devin skill format.
@@ -72,29 +72,36 @@ Core navigation & research:
 
 Upstream & patches (the heart of seamless dual upstream):
 - `/canvas-upstream-sync` (Paper direct + Canvas OG, merged dual-upstream)
-- `/canvas-patch-lifecycle` (POST-AT cycle, Weaver task flow)
-- `/canvas-patch-authoring` (marking convention, minimal hunks)
-- `/canvas-at-guard` (AT syntax, POST-AT dependency, merged access-transformers)
+- `/canvas-patch-lifecycle` (POST-AT cycle, Weaver task flow, patch health scoring)
+- `/canvas-patch-authoring` (marking convention, minimal hunks, patch merging)
+- `/canvas-at-guard` (AT syntax, POST-AT dependency, folia.at vs canvas.at, dedup)
 
 Refactor & future-proofing:
-- `/canvas-refactor-patterns` (minimal diff, layer respect, merged refactor-guard)
-- `/canvas-architecture-evolution` (ADR pattern, migrations, breaking changes)
-- `/canvas-verify-build` (subagent — apply → compile → test → rbp → runDev)
+- `/canvas-refactor-patterns` (minimal diff, layer respect, architecture migration)
+- `/canvas-architecture-evolution` (ADR pattern, MC migration playbook, deprecation)
+- `/canvas-verify-build` (subagent — apply → compile → test → rbp → runDev → CI)
+- `/canvas-migration-patterns` (MC version migration, patch porting, compat shims)
+- `/canvas-api-evolution` (API stability, deprecation timeline, breaking change detection)
 
 Build, Weaver, threading:
-- `/canvas-build-system` (Weaver, Java 25, Gradle 9.5.1)
-- `/canvas-weaver-internals` (task flow, patchFile/patchRepo/patchDir)
-- `/canvas-region-threading` (CRS/AFFINITY, TickGuard, scheduler selection)
-- `/canvas-affinity-scheduler` (subagent — EDF, task pinning, work stealing)
-- `/canvas-chunk-system` (subagent — BalancedChunkSystem, ThreadedRegionizer)
-- `/canvas-debug-threading` (subagent — IllegalStateException, watchdog, races)
-- `/canvas-region-profiling` (task pinning, Spark, per-region timing)
+- `/canvas-build-system` (Weaver, Java 25, Gradle 9.5.1, build perf)
+- `/canvas-weaver-internals` (task flow, patchFile/patchRepo/patchDir, cache debug)
+- `/canvas-region-threading` (CRS/AFFINITY, TickGuard, scheduler selection, async patterns)
+- `/canvas-affinity-scheduler` (subagent — EDF, task pinning, work stealing, perf tuning)
+- `/canvas-chunk-system` (subagent — BalancedChunkSystem, ThreadedRegionizer, load testing)
+- `/canvas-debug-threading` (subagent — IllegalStateException, watchdog, deadlocks, races)
+- `/canvas-region-profiling` (task pinning, Spark, flame graphs, bottleneck detection)
+
+Performance, testing, security:
+- `/canvas-performance-optimization` (Spark advanced, GC tuning, JMH, hot path, flame graph)
+- `/canvas-testing-strategy` (unit/integration/runtime/load, mock TickThread, flaky detection)
+- `/canvas-security-review` (permission audit, injection prevention, CVE scanning, NBT validation)
 
 Config, plugins, review, workflow:
-- `/canvas-config-system` (per-world, global.yml, 96+ files)
-- `/canvas-plugin-compat` (folia-supported, paper-plugin.yml, scheduler migration)
-- `/canvas-code-review` (subagent — threading safety, patch layers, AI policy)
-- `/canvas-pr-workflow` (user-only triggers — PR, release, CI/CD)
+- `/canvas-config-system` (per-world, global.yml, schema validation, migration testing)
+- `/canvas-plugin-compat` (folia-supported, paper-plugin.yml, audit tool, migration patterns)
+- `/canvas-code-review` (subagent — threading safety, patch layers, security, performance)
+- `/canvas-pr-workflow` (user-only triggers — PR, release, CI/CD, changelog automation)
 
 See individual SKILL.md for triggers and exact usage. All skills are written for
 frequent Paper + Canvas OG upstreams + our own architecture changes.

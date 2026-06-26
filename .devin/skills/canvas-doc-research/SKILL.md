@@ -159,6 +159,105 @@ deepwiki_ask_question(repoName="PaperMC/Paper", question="What are the patch mar
 # - Use fixupSourcePatches + rebuildPatches workflow
 ```
 
+## Doc Citation Templates
+
+When grounding an answer, cite sources in a consistent format so reviewers can
+verify.
+
+### Citation formats
+
+| Source type | Format | Example |
+|-------------|--------|---------|
+| Local source (code) | `path/to/File.java:LINE` | `canvas-server/src/main/java/io/canvasmc/canvas/tick/SchedulerUtil.java:42` |
+| Local source (patch) | `patches/base/NNNN-Name.patch` (hunk context) | `canvas-server/minecraft-patches/base/0001-Region-Threading-Base.patch` (TickThread) |
+| DeepWiki page | `DeepWiki <repo> → "<page>"` | `DeepWiki CraftCanvasMC/Canvas → "CRS Scheduler"` |
+| DeepWiki Q&A | `DeepWiki <repo> (ask: "<question>")` | `DeepWiki CraftCanvasMC/Canvas (ask: "task pinning")` |
+| Official docs | `<URL>` | `https://docs.canvasmc.io/canvas/developers/contributing/canvas/` |
+| GitHub source | `<repo>@<branch>:<path>` | `PaperMC/Paper@dev/26.2:paper-server/...` |
+| Web (last resort) | `<URL> (<title>)` | `https://example.com/post (Title)` |
+
+### In-answer citation style
+
+- **Code-grounded claim**: "The scheduler throws on `cancel()` —
+  `AffinitySchedulerThreadPool.java:120`."
+- **Docs-grounded claim**: "Per DeepWiki CraftCanvasMC/Canvas → 'CRS
+  Scheduler', the pool is EDF-based."
+- **Mixed**: "The pool is EDF-based (DeepWiki 'CRS Scheduler'); the exact
+  comparator is `TICK_COMPARATOR_BY_TIME` at
+  `AffinitySchedulerThreadPool.java:55`."
+- **Distinguish** code-grounded from docs-grounded conclusions explicitly —
+  don't present a DeepWiki summary as if it were verified line-by-line.
+
+## Doc Freshness Checks
+
+DeepWiki and training data can lag the current commit. Verify freshness
+before relying on a source.
+
+### How to verify docs are current
+
+- **DeepWiki lag** — DeepWiki indexes GitHub repos but may not have the
+  latest commit. After a DeepWiki answer, grep local source to confirm the
+  signature/class still exists at the pinned `paperCommit`.
+- **API version** — check `gradle.properties` (`mcVersion`, `apiVersion`,
+  `paperCommit`) before quoting an API; MC 26.2 differs from 1.21.x.
+- **Commit date** — for GitHub/web sources, check the commit date or page
+  last-modified. A 2023 blog post about "Folia scheduler" likely describes an
+  old version.
+- **Local source is authoritative** — for exact signatures, the local
+  applied source at the current commit wins over DeepWiki, docs, and
+  training data. When they disagree, cite the local `file:line`.
+- **Canvas vs Folia** — Canvas absorbed Folia patches but rewrote some (CRS
+  scheduler, chunk system). Folia docs/source may describe behavior Canvas no
+  longer has. Always verify in Canvas source.
+
+### Freshness checklist
+
+- [ ] Does the class/method exist in local source at the current commit?
+- [ ] Does the signature match what the doc claims?
+- [ ] Is the doc/page dated after the current `paperCommit`?
+- [ ] If DeepWiki: did you verify the key claim in local source?
+
+## Cross-Reference Protocol
+
+Skills should cross-reference each other so an agent landing in one skill can
+discover related skills without re-exploring.
+
+### How to cross-reference
+
+- Use the `/canvas-<name>` invocation format (matches the skill `name` field).
+- Place cross-references inline where the related topic is relevant, not in a
+  separate "see also" dump.
+- Mark conditional/future skills with "(if created)" so a dangling reference
+  is clearly intentional, not a typo.
+
+### Examples
+
+- In `canvas-region-threading`: "See `/canvas-affinity-scheduler` for full
+  scheduler internals." / "See `/canvas-async-patterns` (if created) for a
+  dedicated async cookbook."
+- In `canvas-affinity-scheduler`: "Use Spark with `--region` pinning (see
+  `/canvas-region-profiling`)."
+- In `canvas-chunk-system`: "See `/canvas-region-profiling` → Flame Graph
+  Interpretation, and `/canvas-performance-optimization` (if created)."
+- In `canvas-debug-threading`: "Load-test with movement (see
+  `/canvas-chunk-system` → Load Testing)."
+
+### When to add a cross-reference
+
+- When one skill's topic depends on another's detail (e.g. threading skill
+  references scheduler internals).
+- When a workflow spans skills (e.g. PR workflow references patch authoring,
+  config system, code review).
+- When a skill mentions a concept fully documented elsewhere — don't
+  duplicate; cross-reference.
+
+### When NOT to cross-reference
+
+- Don't cross-reference unrelated skills just for discoverability — it adds
+  noise.
+- Don't cross-reference a skill for a concept already fully covered in the
+  current skill.
+
 ## Pitfalls
 
 1. **Training data is stale** — MC 26.2 APIs differ from 1.20.x/1.21.x. Always verify.

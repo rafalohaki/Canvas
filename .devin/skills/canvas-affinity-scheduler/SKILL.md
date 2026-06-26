@@ -261,6 +261,114 @@ grep -rl "SchedulerType" canvas-server/minecraft-patches/base/ 2>/dev/null
 # "Starting AFFINITY region scheduler" / "Region profiling marked as supported"
 ```
 
+## Performance Tuning
+
+### Benchmark patterns
+
+Scheduler behavior is hard to unit-test — measure it at runtime with `runDev`
+and a realistic load. Key metrics:
+
+- **TPS** — overall; watch for drops when many regions are active.
+- **Per-region tick time** — use Spark with `--region` pinning (see
+  `/canvas-region-profiling`) to isolate a hot region.
+- **Region deadline misses** — console logs `"Region surrounding ... missed
+  deadline"` when `overloadedLogMillis` is exceeded; lower that threshold to
+  catch overload earlier.
+- **Thread pool utilization** — are all tick threads busy, or are some idle
+  while others are overloaded? Idle threads + overloaded regions ⇒ work
+  stealing is disabled or steal threshold is too high.
+
+Benchmark recipe:
+1. Start `./gradlew runDev` with `scheduler: AFFINITY`, `threads: -1` (auto).
+2. Spread players across distant chunks (multiple regions).
+3. `/spark profiler start` (global) or `--region ~ ~` (pinned) for a sample.
+4. Compare tick-time distributions across thread counts (`threads: 2, 4, 8,
+   auto`) — keep the config that minimizes deadline misses.
+5. Repeat after changing `gridExponent` (region size) — boundary overhead
+   scales with region count.
+
+### Measuring scheduler overhead
+
+Scheduler overhead = time spent in dispatch/steal/poll vs. actual tick work.
+Use Spark's flame graph (see `/canvas-region-profiling` → Flame Graph
+Interpretation):
+
+- Frames in `io.canvasmc.canvas.tick.*` (poll, steal, link/unlink) are
+  overhead.
+- Frames in `Level.tick`, `Entity.tick`, `BlockEntity` are actual work.
+- If overhead > ~10% of a region's tick budget, consider: fewer threads
+  (less stealing contention), larger `gridExponent` (fewer regions), or
+  `enableWorkStealing: false` if regions are well-balanced.
+
+### Optimal thread count
+
+- **Auto (`-1`)** is usually best — matches core count.
+- More threads than cores → context-switch overhead; only helps if tick work
+  is I/O-bound (it shouldn't be — I/O belongs on `AsyncScheduler`).
+- Fewer threads than active regions → work stealing must balance; ensure
+  `enableWorkStealing: true` and a reasonable `stealThresholdMillis`.
+- **`< 2` threads disables profiling** (`doesSupportRegionProfiler()` returns
+  false) — pinning would deadlock with one runner.
+- CPU affinity (`enableAffinitySchedulerCpuAffinity: true`) needs exactly 1
+  core per tick thread; set `tickRegionAffinity` to the CPU IDs.
+
+## Scheduler Comparison — AFFINITY vs Folia's default
+
+| Aspect | AFFINITY (Canvas) | EDF (Folia default) | WORK_STEALING |
+|--------|-------------------|---------------------|---------------|
+| Pinning (profiling) | Yes | No | No |
+| Work stealing | Yes (configurable) | No | Yes (NUMA-aware) |
+| CPU affinity | Yes (Linux) | No | No |
+| Mid-tick tasks | Yes (configurable) | No | No |
+| Profiling support | Yes (`>= 2` threads) | No (`NullHandler`) | No (`NullHandler`) |
+| `cancel()` | Unsupported | Unsupported | Unsupported |
+| Best for | Production + profiling | Simple, low-overhead | NUMA hardware, no profiling needed |
+
+**Trade-offs**:
+- AFFINITY adds overhead (local queues, steal checks, pinning state) but
+  enables region profiling and CPU pinning. Use it in production where you may
+  need to profile a hot region without restarting.
+- EDF is the simplest pool — lowest dispatch overhead, but no work stealing so
+  an overloaded region blocks its thread with no relief.
+- WORK_STEALING balances load without AFFINITY's profiling hooks — good for
+  dedicated servers that never profile.
+
+The **API surface is identical** across all three — plugins don't notice the
+difference. Only internal dispatch and profiling capability change.
+
+## Work Stealing Tuning
+
+### When to adjust steal threshold
+
+`stealThresholdMillis` (default `3`) controls how long a task can miss its
+deadline before another runner may steal it.
+
+- **Lower it** (e.g. `1`) when regions are unevenly loaded — overloaded
+  regions get relief sooner. Cost: more steal attempts (overhead).
+- **Raise it** (e.g. `5–10`) when regions are well-balanced — reduces
+  unnecessary steal attempts. Risk: a briefly-overloaded region won't get
+  relief until the threshold elapses.
+- **Disable stealing** (`enableWorkStealing: false`) only when regions are
+  guaranteed balanced (single player, or evenly spread players) — otherwise
+  one hung region blocks its thread entirely.
+
+### How to measure steal frequency
+
+There is no built-in steal counter — instrument it or infer from behavior:
+
+1. **Spark flame graph** — frames in `poll` → `steal` paths indicate stealing
+   is active. Frequent steal frames ⇒ threshold too low or load imbalanced.
+2. **Deadline misses** — if misses persist with stealing enabled, either the
+   threshold is too high or there aren't enough threads.
+3. **Add temporary logging** in `AffinitySchedulerThreadPool.poll()` /
+   `isStealable()` (debug build) to count steals per tick — remove before PR.
+4. **Thread dump** — if one runner is `STATE_EXECUTING_TICK` while others are
+  `STATE_IDLE`, stealing isn't happening (disabled or threshold too high).
+
+Rule of thumb: a small amount of stealing under uneven load is healthy;
+constant stealing under balanced load means the threshold is too low or
+`gridExponent` is too small (too many tiny regions).
+
 ## Pitfalls
 
 1. **Don't assume Folia's scheduler internals** — Canvas rewrote it. Grep the actual source.

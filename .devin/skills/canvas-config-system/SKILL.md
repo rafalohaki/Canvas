@@ -129,6 +129,124 @@ When a Canvas version changes config keys, defaults, or structure:
 # Confirm validation warnings appear for bad values
 ```
 
+## Config Schema Validation
+
+Beyond the basic "reject out-of-range values" rule, structured validation at
+load time catches misconfiguration before it causes runtime misbehavior.
+
+### Validate at load time
+
+- **Numeric ranges** — clamp or reject with a warning. Log the effective
+  value. Example: `threads` must be `-1` (auto) or `>= 1`; `gridExponent`
+  must be `>= 0` and typically `<= 10` (regions of 1024+ chunks are
+  impractical).
+- **Enum-like values** — validate against the allowed set (e.g.
+  `scheduler: EDF|WORK_STEALING|AFFINITY`, `guardSeverity:
+  SILENT|LOG|THROW`). Reject unknown values with a warning + fallback to
+  default.
+- **Cross-field constraints** — e.g. CPU affinity requires
+  `tickRegionAffinity` to have at least `threads` entries; validate the
+  relationship, not just individual fields.
+- **Per-world vs global** — a per-world key in the global section (or vice
+  versa) should warn, not silently be ignored.
+
+### Validation pattern
+
+```java
+// In the config load path
+int threads = config.getInt("threaded-regions.threads", -1);
+if (threads != -1 && threads < 1) {
+    LOGGER.warn("threads={} invalid, falling back to -1 (auto)", threads);
+    threads = -1;
+}
+```
+
+- Log the effective value at startup so operators can confirm parsing.
+- Never crash the server on a bad config — warn and fall back.
+- Grep current source for existing validation patterns and follow them.
+
+## Config Migration Testing
+
+When a Canvas version changes config keys, defaults, or structure, verify
+migrations don't break deployed configs.
+
+### How to test migrations
+
+1. **Keep an old config fixture** — check a representative `global.yml` /
+   per-world config from the previous version into a test fixtures dir.
+2. **Load with the new code** — start `./gradlew runDev` with the old config
+   in place; confirm:
+   - Renamed keys are read from the old name as fallback and rewritten to the
+     new name on next save.
+   - Removed keys log a migration warning (not an error) and are ignored.
+   - New keys with changed defaults are applied only if missing (existing
+     user values are preserved).
+   - Unknown keys log a warning rather than crashing.
+3. **Verify effective values** — check the startup log for the effective
+   values; confirm they match expectations (old value preserved, or new
+   default applied for missing keys).
+4. **Round-trip save** — trigger a config save (if supported) and confirm the
+   file now uses the new keys with the old values intact.
+5. **Document the migration** — note in the PR/changelog which keys changed,
+   renamed, or were removed.
+
+### Migration test checklist
+
+- [ ] Old config loads without error on new code
+- [ ] Renamed keys: old name still read, new name written on save
+- [ ] Removed keys: warning logged, no crash
+- [ ] New defaults: applied only to missing keys, existing values preserved
+- [ ] Unknown keys: warning, no crash
+- [ ] Effective values logged at startup
+
+## Config Performance
+
+Config lookups are not free — in hot paths (per-tick, per-entity, per-block)
+they add up. Cache and avoid repeated reads.
+
+### Avoiding config lookups in hot paths
+
+- **Read once, cache in a field** — for per-world or global config read every
+  tick, read it at load/world-init time into a `static` or world-scoped field
+  and reference the field in the hot path.
+- **Invalidate on reload** — if the config can be reloaded at runtime, clear
+  the cache and re-read. Use a `volatile` field or a generation counter.
+- **Don't read config inside `Entity.tick` / `BlockEntity` loops** — read it
+  once before the loop and pass the value down, or cache it on the
+  world/region data.
+
+### Caching patterns
+
+```java
+// Cached at world init, invalidated on reload
+private volatile int cachedGridExponent;
+
+void onLoad() {
+    cachedGridExponent = config.getInt("threaded-regions.gridExponent", 4);
+}
+
+// Hot path reads the volatile field, not the config
+int regionSize = 1 << cachedGridExponent;
+```
+
+- **`volatile` for single values** — cheap reads, safe across threads.
+- **`AtomicReference` / `AtomicInteger`** — if the value is updated
+  concurrently with reads.
+- **Generation counter** — if multiple cached values must be invalidated
+  together, bump a `volatile int generation` on reload and re-read all when it
+  changes.
+- **Per-world cache on `CanvasRegionizedWorldData`** — for per-world config,
+  cache on the world's regionized data so each region reads the local cache.
+
+### What NOT to do
+
+- Don't call `config.getInt(...)` / `config.getString(...)` inside a per-tick
+  loop — even fast map lookups add up at 20 TPS × thousands of entities.
+- Don't cache config in a region-owned field without invalidation — a reload
+  won't reach cached regions.
+- Don't read config from async without caching — config objects may not be
+  thread-safe for concurrent reads (verify the implementation; grep source).
+
 ## Pitfalls
 
 1. **Config keys are version-specific** — don't assume key names from older

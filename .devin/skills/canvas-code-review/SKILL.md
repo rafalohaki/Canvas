@@ -110,6 +110,80 @@ git diff --staged --stat
 - [ ] Patches are neat and tidy, no unnecessary diff
 - [ ] Changes were tested locally
 
+## Security Checklist
+
+Review every change for basic security issues:
+
+- [ ] **No secrets hardcoded** — no API keys, tokens, passwords, or private
+      keys in source, patches, or config. Check for base64-encoded secrets too.
+- [ ] **No SQL injection** — if any database/query code is touched, verify
+      parameterized queries or prepared statements are used. No string
+      concatenation for SQL.
+- [ ] **Input validation** — all external input (player commands, config
+      values, network packets) is validated before use. Check for:
+      - Unbounded string lengths (DoS via memory)
+      - Negative or zero values where positive expected
+      - Null without `@Nullable` annotation or null check
+- [ ] **No command injection** — if `Runtime.exec()` or `ProcessBuilder` is
+      used, input must be sanitized. No player-controlled strings in shell
+      commands.
+- [ ] **No path traversal** — file paths from user input are sanitized
+      (no `../` escaping). Use `Path.normalize()` + `startsWith()` checks.
+- [ ] **No unsafe deserialization** — no `ObjectInputStream` on untrusted
+      data. Use JSON or explicit serialization.
+- [ ] **Permission checks not bypassed** — command handlers still enforce
+      permissions. Patches don't skip `PermissionAttachment` or `hasPermission()`.
+- [ ] **No information leakage** — error messages don't expose internal
+      paths, stack traces, or system info to players.
+
+```bash
+# Grep for common security red flags in the diff
+git diff --staged | grep -iE "password|secret|token|api.key|private.key"
+git diff --staged | grep -E "Runtime\.getRuntime\(\)\.exec|ProcessBuilder"
+git diff --staged | grep -E "ObjectInputStream|readObject\("
+git diff --staged | grep -E "SELECT.*\+|INSERT.*\+"  # SQL concatenation
+```
+
+See `/canvas-security-review` for a deep security audit skill.
+
+## Performance Checklist
+
+Review every change for performance issues, especially in hot paths:
+
+- [ ] **Hot path identification** — is the changed code in a tick loop,
+      chunk loading, entity ticking, or packet handling? If so, every
+      allocation matters.
+      ```bash
+      # Check if the changed file is in a tick-critical path
+      grep -rl "tick\|Tick\|TICK" canvas-server/src/minecraft/java/<path>
+      ```
+- [ ] **No allocation in tick** — avoid `new` in hot paths:
+      - No `new ArrayList<>()`, `new HashMap<>()`, `new Object[...]` per tick.
+      - No autoboxing (`Integer.valueOf()` from `int` in collections).
+      - No `String.format()` or string concatenation in logging unless
+        the log level is enabled.
+      - No lambda capture (creates a synthetic object) in tight loops.
+- [ ] **No unnecessary boxing** — `Integer`/`Double` where `int`/`double`
+      suffices. Use primitive collections (fastutil) if needed.
+- [ ] **No O(n²) in hot paths** — check loop nesting. Entity lists and
+      chunk iteration can be large.
+- [ ] **No blocking I/O on tick thread** — file reads, network calls, or
+      `Thread.sleep()` on a tick thread stalls the region.
+- [ ] **No excessive synchronization** — `synchronized` blocks in tick
+      paths cause contention. Use lock-free structures or region-local access.
+- [ ] **Cache reuse** — repeated computations (e.g., config lookups) are
+      cached, not recomputed every tick.
+- [ ] **No iterator allocation** — use `for (int i = 0; i < list.size(); i++)`
+      instead of `for (var x : list)` in ultra-hot paths (iterator object
+      allocation).
+
+```bash
+# Grep for allocation patterns in the diff
+git diff --staged | grep -E "new (ArrayList|HashMap|HashSet|Object\[)"
+git diff --staged | grep -E "Thread\.sleep|\.wait\(\)|\.join\(\)"
+git diff --staged | grep -E "synchronized.*\{"
+```
+
 ## Review Patterns (from awesome-agent-skills)
 
 Apply each pattern to every diff hunk:
@@ -190,12 +264,21 @@ git diff --stat     # did anything unexpected change?
 - Fully AI-generated with zero human review (AI Policy violation)
 - Mixed concerns in one patch (refactor + feature + bugfix)
 
+## Cross-References
+
+- `/canvas-security-review` — deep security audit (secrets, injection, permissions)
+- `/canvas-verify-build` — full verification pipeline after review
+- `/canvas-refactor-patterns` — safe refactoring patterns
+- `/canvas-patch-authoring` — patch layer rules, marking conventions
+
 ## Output Format
 
 Provide review as:
 1. **Summary**: approve / request changes / reject
 2. **Critical issues**: region threading, build-breaking — cite file:line
 3. **Major issues**: logic, error handling, security — cite file:line
-4. **Style/minimal-diff issues**: suggestions — cite file:line
-5. **Testing notes**: what to test, how
-6. **AI policy note**: if applicable
+4. **Security issues**: secrets, injection, permissions — cite file:line
+5. **Performance issues**: hot path, allocation, boxing — cite file:line
+6. **Style/minimal-diff issues**: suggestions — cite file:line
+7. **Testing notes**: what to test, how
+8. **AI policy note**: if applicable

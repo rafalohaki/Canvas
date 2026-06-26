@@ -157,6 +157,68 @@ deepwiki_ask_question(repoName="PaperMC/Paper", question="What changed in dev/26
 deepwiki_ask_question(repoName="CraftCanvasMC/Canvas", question="Summarize changes in recent commits for region threading / scheduler")
 ```
 
+## Upstream Canvas Sync (CraftCanvasMC/Canvas)
+
+Upstream Canvas (CraftCanvasMC/Canvas) is our parent fork. Syncing with it is
+separate from Paper upstream sync.
+
+**Important:** Upstream Canvas has also moved to a **Paper-based** architecture
+(no longer Folia-based). This means:
+- Upstream Canvas patches now apply on Paper, not Folia — same base as us.
+- The Folia region threading patches are absorbed as Canvas-original in both
+  upstream Canvas and our fork.
+- `build-data/folia.at` is a new AT file absorbed from upstream Canvas — it
+  contains Folia-originated access transformers that were previously inlined
+  in patches. Now they live in a dedicated AT file for clarity.
+
+### Workflow: syncing with upstream Canvas
+
+```bash
+# 1. Add the upstream remote if not present
+git remote add upstream https://github.com/CraftCanvasMC/Canvas.git
+
+# 2. Fetch latest
+git fetch upstream
+
+# 3. Compare patch structures
+#    Check if upstream has new/removed/merged patches
+diff <(cd upstream && find canvas-server/minecraft-patches/base -name "*.patch" | sort) \
+     <(find canvas-server/minecraft-patches/base -name "*.patch" | sort)
+
+# 4. Cherry-pick improvements we want
+git cherry-pick <commit-hash>   # from upstream
+
+# 5. If upstream merged patches (e.g., 14→7 base patches), evaluate whether
+#    to follow their merge or keep our split. Document decision in roadmap.md.
+
+# 6. Check for new AT files (e.g., folia.at was recently added upstream)
+diff <(cd upstream && cat build-data/folia.at 2>/dev/null) \
+     <(cat build-data/folia.at 2>/dev/null)
+
+# 7. Apply, rebuild, verify
+./gradlew applyAllPatches --no-configuration-cache
+./gradlew :canvas-server:compileJava
+./gradlew test
+./rbp.sh
+```
+
+### upstream.sh for Canvas sync
+
+The `upstream.sh` script currently handles Paper upstream. For Canvas OG
+sync, use the manual workflow above until `upstream.sh canvas` subcommand is
+implemented (see target commands in the upstream.sh section above).
+
+### folia.at note
+
+`build-data/folia.at` is a new AT file absorbed from upstream Canvas. It
+contains Folia-originated access transformers (visibility changes that Folia
+patches expected). These were previously replicated in `canvas.at` or inlined
+in patches. Now they have a dedicated file for provenance clarity.
+
+- Folia-specific ATs → `build-data/folia.at`
+- Canvas-original ATs → `build-data/canvas.at`
+- See `/canvas-at-guard` → "folia.at vs canvas.at" for the full partitioning.
+
 ## Pitfalls (Dual Upstream Edition)
 
 1. **Always use `--no-configuration-cache`** after any commit bump.

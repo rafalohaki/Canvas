@@ -40,9 +40,10 @@ See `/canvas-patch-authoring` and `/canvas-upstream-sync`.
 
 ## The POST-AT Application Cycle (critical)
 
-Base patches are applied **after** Canvas ATs (`build-data/canvas.at`) via the
-`runCanvasSetup` cache. This is why Folia-absorbed patches apply cleanly: Canvas
-ATs replicate Folia's `private → public` changes, so patches apply on POST-AT
+Base patches are applied **after** Canvas ATs (`build-data/canvas.at` +
+`build-data/folia.at`) via the `runCanvasSetup` cache. This is why
+Folia-absorbed patches apply cleanly: Canvas ATs (including `folia.at`)
+replicate Folia's `private → public` changes, so patches apply on POST-AT
 state where the visibility is already open.
 
 ATs survive rebases better than patches — prefer AT over a patch hunk for
@@ -52,7 +53,7 @@ visibility changes.
 
 ```
 runCanvasSetup
-  → Paper source → Paper ATs → Paper patches → Canvas ATs → cache repo (POST-AT state)
+  → Paper source → Paper ATs → Paper patches → Canvas ATs (canvas.at + folia.at) → cache repo (POST-AT state)
 applyMinecraftBasePatches
   → clones cache (POST-AT) → git clean -fxd → git reset --hard HEAD → git am --3way *.patch
 applyMinecraftSourcePatches
@@ -108,6 +109,103 @@ normalize hunk formatting.
 2. Make multi-file changes, commit in `canvas-server/src/minecraft/java/`
 3. `git format-patch -1 HEAD -o canvas-server/minecraft-patches/features/`
 4. Rename to `00NN-Description.patch`
+
+## Patch Health Scoring
+
+Assess whether a patch is healthy (low maintenance burden) or needs attention:
+
+### Health score factors
+
+| Factor | Healthy | Needs attention |
+|--------|---------|-----------------|
+| **Apply success** | Applies cleanly every time | Frequently rejects, needs manual fixing |
+| **Reject count** | 0 rejects on upstream sync | Multiple rejects per sync cycle |
+| **Context stability** | Hunks anchored on signatures (stable) | Hunks anchored on body lines (churn) |
+| **Upstream drift** | Patch still matches upstream structure | Upstream has diverged significantly |
+| **Size** | Small, focused (one concern) | Large, mixed concerns |
+| **Age** | Recently reviewed/updated | Not touched in 3+ upstream syncs |
+| **AT dependency** | No AT dependency, or AT is stable | Depends on AT that upstream may change |
+| **Test coverage** | Has a test exercising the change | No test, untested behavior |
+
+### Scoring
+- **Green (healthy)**: applies cleanly, stable context, one concern, has test.
+- **Yellow (watch)**: occasional rejects, but fixable in <5 min. Monitor.
+- **Red (action needed)**: frequent rejects, unstable context, mixed concerns.
+  Action: split, refactor context anchors, or merge with a related patch.
+
+### Assessment commands
+```bash
+# Check if a patch applies cleanly (fresh state)
+rm -rf canvas-server/.gradle/caches/paperweight/taskCache/runCanvasSetup/
+./gradlew applyAllPatches --no-configuration-cache 2>&1 | grep -i "reject\|fail"
+
+# Check patch size (lines)
+wc -l canvas-server/minecraft-patches/base/{canvas,local}/*.patch | sort -n
+
+# Check if any rejects accumulated
+ls canvas-server/minecraft-patches/rejected/ 2>/dev/null
+
+# Check AT dependencies
+grep -f canvas-server/minecraft-patches/base/{canvas,local}/0001-*.patch \
+     build-data/canvas.at build-data/folia.at
+```
+
+### Actions by score
+- **Green** → no action. Review quarterly.
+- **Yellow** → add a note in `roadmap.md`. Review at next upstream sync.
+- **Red** → schedule a refactor: split/merge, stabilize context, add test.
+  Document the decision as an ADR in `roadmap.md`.
+
+## Reject Resolution Patterns
+
+Common reject patterns and how to fix them:
+
+### Pattern: "Context not found" (hunk context drift)
+**Symptom**: `patch` or `git am` reports "hunk failed" because surrounding
+lines changed upstream.
+**Fix**: Open the `.rej` file, find the new location of the changed code in
+the current source, update the hunk context lines to match. Use stable
+anchors (method signatures, class declarations) instead of body lines.
+
+### Pattern: "sha1 information is lacking" (base patch)
+**Symptom**: `git am --3way` fails with "sha1 information is lacking or useless".
+**Fix**: The base patch is missing `index` lines (blob SHA1s). Regenerate
+from POST-AT state:
+```bash
+cd canvas-server/.gradle/caches/paperweight/taskCache/runCanvasSetup/
+git format-patch -1 HEAD -o <patch-dir>/
+```
+
+### Pattern: "File not found" (file moved/renamed upstream)
+**Symptom**: Patch targets a file that no longer exists at that path.
+**Fix**: Find the new location: `grep -rl "<ClassName>" canvas-server/src/minecraft/java/`.
+Update the patch header (`diff --git a/old/path b/new/path`) and hunk paths.
+If the file was split into multiple files, split the patch accordingly.
+
+### Pattern: "Already applied" (duplicate change)
+**Symptom**: Patch fails because the change is already in the source (upstream
+added the same fix).
+**Fix**: Check if the patch is now redundant. If so, remove it and update
+`AGENTS.md` + `roadmap.md`. If partially redundant, trim the patch to only
+the remaining delta.
+
+### Pattern: "AT dependency broken" (visibility changed upstream)
+**Symptom**: Patch fails because a field/method it accesses is no longer
+private (upstream made it public) or was renamed.
+**Fix**: If upstream made it public, remove the AT entry (see `/canvas-at-guard`
+→ AT Validation). If renamed, update the AT entry and the patch references.
+
+### Pattern: "Fuzz factor" (offset but applicable)
+**Symptom**: Patch applies with a fuzz factor warning (lines offset by N).
+**Fix**: Usually OK — the patch applied. But rebuild it to update context:
+`./rbp.sh --force`. Fuzz > 3 lines means the context is drifting — consider
+stabilizing the anchors.
+
+### Pattern: "Multiple rejects in one patch" (patch too large)
+**Symptom**: Several hunks reject in the same patch.
+**Fix**: The patch is too large or touches unstable areas. Split it into
+smaller patches (one concern each). See `/canvas-patch-authoring` → Patch
+Merging (in reverse — split instead of merge).
 
 ## Fixing Rejects
 
